@@ -1,20 +1,16 @@
-// C-003_ARHAAgentEngine_V4
-// Enhanced Agent Engine with 15 Personas + Auto-Trigger + Orchestration
-// BACKWARD COMPATIBLE - existing functionality preserved
+// C-003_PersonaAgent
+// Adapted from: hisol-unified-mcp/src/engines/C-003_ARHAAgentEngine_V4.ts @ v1.0
+// V3 types inlined (C-003_ARHAAgentEngine legacy types merged)
+/**
+ * Enhanced Persona Agent with 15 Personas + Auto-Trigger + Orchestration
+ * BACKWARD COMPATIBLE - existing functionality preserved
+ */
 
 import {
   ARHAAgentRequest,
   ARHAAgentResponse,
   ARHAEmotionVector
 } from '../types/arha-emotion.js';
-
-// Import from C-003 engine (existing types)
-import {
-  ARHACommandRequest,
-  ARHACommandResponse,
-  ARHAOrchestrationRequest,
-  ARHAOrchestrationResponse
-} from './C-003_ARHAAgentEngine.js';
 
 import { PersonaRole } from '../core/types.js';
 import { getPersonaDefinition, getAllPersonaRoles } from '../personas/definitions.js';
@@ -23,20 +19,73 @@ import { orchestrator } from '../systems/orchestrator.js';
 import { contextManager } from '../systems/context-manager.js';
 import { promptBuilder } from '../systems/prompt-builder.js';
 
-// Feature flags for safe rollout
+// ── V3 Types (inlined from legacy C-003_ARHAAgentEngine) ──────────────────
+
+export interface ARHACommandRequest {
+  commandType: 'explore' | 'analyze' | 'implement' | 'orchestrate';
+  userIntent: string;
+  parameters?: Record<string, any>;
+  priority?: 'low' | 'medium' | 'high';
+}
+
+export interface ARHACommandResponse {
+  commandType: string;
+  executionResult: any;
+  executionTime: number;
+  success: boolean;
+  output: string;
+  nextSteps?: string[];
+}
+
+export interface ARHAOrchestrationRequest {
+  userInput: string;
+  culturalContext?: string;
+  emotionHint?: ARHAEmotionVector;
+  hisolPersonality?: 'creative' | 'analytical' | 'protective' | 'adaptive';
+  sessionHistory?: string[];
+}
+
+export interface ARHAOrchestrationResponse {
+  orchestrationResult: any;
+  involvedAgents: string[];
+  executionPlan: Array<{
+    agent: string;
+    priority: number;
+    estimatedTime: number;
+    dependencies: string[];
+  }>;
+  finalOutput: string;
+  confidence: number;
+}
+
+// ── Feature Flags ──────────────────────────────────────────────────────────
+
 const FEATURES = {
   USE_V4_PERSONAS: process.env.ENABLE_V4_PERSONAS === 'true',
   USE_AUTO_TRIGGER: process.env.ENABLE_AUTO_TRIGGER === 'true',
   USE_ORCHESTRATION: process.env.ENABLE_ORCHESTRATION === 'true',
 };
 
-export class ARHAAgentEngineV4 {
+// ── Persona Agent ──────────────────────────────────────────────────────────
+
+export class PersonaAgent {
   private legacyAgentCapabilities: Map<string, string[]> = new Map();
 
   constructor() {
     this.initializeLegacyAgentCapabilities();
-    console.log('C-003_ARHAAgentEngine_V4: Enhanced engine initialized with 15 personas');
-    console.log('C-003_ARHAAgentEngine_V4: Feature flags:', FEATURES);
+    console.log('C-003_PersonaAgent: Enhanced persona agent initialized with 15 personas');
+    console.log('C-003_PersonaAgent: Feature flags:', FEATURES);
+  }
+
+  /**
+   * Main entry point with graceful degradation
+   */
+  async processAgent(request: ARHAAgentRequest): Promise<ARHAAgentResponse> {
+    if (FEATURES.USE_V4_PERSONAS && FEATURES.USE_AUTO_TRIGGER) {
+      return this.processAgentV4(request);
+    } else {
+      return this.processAgentLegacy(request);
+    }
   }
 
   /**
@@ -62,30 +111,24 @@ export class ARHAAgentEngineV4 {
    */
   async processAgentV4(request: ARHAAgentRequest): Promise<ARHAAgentResponse> {
     try {
-      console.log('C-003_V4: Processing with auto-trigger and orchestration');
+      console.log('C-003_PersonaAgent: Processing with auto-trigger and orchestration');
 
-      // Update context
       contextManager.setTask(request.request);
       contextManager.extractHints(request.request);
 
-      // Auto-trigger persona selection
       const triggerResult = autoTriggerEngine.selectPersonas(
         request.request,
         request.emotionContext,
         3
       );
 
-      console.log('C-003_V4: Selected personas:', triggerResult.selected_personas);
-      console.log('C-003_V4: Reasoning:', triggerResult.reasoning);
+      console.log('C-003_PersonaAgent: Selected personas:', triggerResult.selected_personas);
+      console.log('C-003_PersonaAgent: Reasoning:', triggerResult.reasoning);
 
-      // Create orchestration plan
       const plan = orchestrator.createPlan(triggerResult.selected_personas, request.request);
-
-      // Execute with primary persona
       const primaryPersona = plan.primary_persona;
       const personaDef = getPersonaDefinition(primaryPersona);
 
-      // Build enhanced prompt
       const context = contextManager.getContext();
       const prompt = promptBuilder.buildPrompt(
         primaryPersona,
@@ -94,7 +137,6 @@ export class ARHAAgentEngineV4 {
         request.request
       );
 
-      // Simulate execution (in real implementation, this would call Claude API)
       const response: ARHAAgentResponse = {
         agentType: primaryPersona,
         response: `[${primaryPersona}]\n\nI've analyzed your request: "${request.request}"\n\n` +
@@ -116,18 +158,7 @@ export class ARHAAgentEngineV4 {
       return response;
 
     } catch (error) {
-      console.warn('C-003_V4: Error in V4 processing, falling back to legacy:', error);
-      return this.processAgentLegacy(request);
-    }
-  }
-
-  /**
-   * Main entry point with graceful degradation
-   */
-  async processAgent(request: ARHAAgentRequest): Promise<ARHAAgentResponse> {
-    if (FEATURES.USE_V4_PERSONAS && FEATURES.USE_AUTO_TRIGGER) {
-      return this.processAgentV4(request);
-    } else {
+      console.warn('C-003_PersonaAgent: Error in V4 processing, falling back to legacy:', error);
       return this.processAgentLegacy(request);
     }
   }
@@ -146,9 +177,41 @@ export class ARHAAgentEngineV4 {
     return getPersonaDefinition(persona);
   }
 
-  // ========================================================================
-  // Legacy Methods (Preserved for Backward Compatibility)
-  // ========================================================================
+  /**
+   * Command execution (backward compatible)
+   */
+  async executeCommand(request: ARHACommandRequest): Promise<ARHACommandResponse> {
+    const startTime = Date.now();
+    const output = `Executing ${request.commandType} command: ${request.userIntent}`;
+
+    return {
+      commandType: request.commandType,
+      executionResult: { success: true },
+      executionTime: Date.now() - startTime,
+      success: true,
+      output,
+      nextSteps: ['Verify results', 'Iterate if needed']
+    };
+  }
+
+  /**
+   * Orchestration (backward compatible)
+   */
+  async orchestrate(request: ARHAOrchestrationRequest): Promise<ARHAOrchestrationResponse> {
+    return {
+      orchestrationResult: { success: true },
+      involvedAgents: ['HiSol-Protector', 'HiSol-Explorer', 'HiSol-Analyst'],
+      executionPlan: [
+        { agent: 'HiSol-Protector', priority: 1, estimatedTime: 100, dependencies: [] },
+        { agent: 'HiSol-Explorer', priority: 2, estimatedTime: 150, dependencies: ['HiSol-Protector'] },
+        { agent: 'HiSol-Analyst', priority: 3, estimatedTime: 120, dependencies: ['HiSol-Explorer'] }
+      ],
+      finalOutput: `Orchestration complete for: ${request.userInput}`,
+      confidence: 0.85
+    };
+  }
+
+  // ── Legacy private methods ─────────────────────────────────────────────────
 
   private initializeLegacyAgentCapabilities(): void {
     this.legacyAgentCapabilities.set('HiSol-Protector', [
@@ -221,41 +284,6 @@ export class ARHAAgentEngineV4 {
       reasoning: 'Analytical assessment with quality metrics',
       suggestedActions: this.legacyAgentCapabilities.get('HiSol-Analyst') || [],
       emotionalAssessment: 'Analytical mode activated'
-    };
-  }
-
-  /**
-   * Command execution (backward compatible)
-   */
-  async executeCommand(request: ARHACommandRequest): Promise<ARHACommandResponse> {
-    const startTime = Date.now();
-
-    const output = `Executing ${request.commandType} command: ${request.userIntent}`;
-
-    return {
-      commandType: request.commandType,
-      executionResult: { success: true },
-      executionTime: Date.now() - startTime,
-      success: true,
-      output,
-      nextSteps: ['Verify results', 'Iterate if needed']
-    };
-  }
-
-  /**
-   * Orchestration (backward compatible)
-   */
-  async orchestrate(request: ARHAOrchestrationRequest): Promise<ARHAOrchestrationResponse> {
-    return {
-      orchestrationResult: { success: true },
-      involvedAgents: ['HiSol-Protector', 'HiSol-Explorer', 'HiSol-Analyst'],
-      executionPlan: [
-        { agent: 'HiSol-Protector', priority: 1, estimatedTime: 100, dependencies: [] },
-        { agent: 'HiSol-Explorer', priority: 2, estimatedTime: 150, dependencies: ['HiSol-Protector'] },
-        { agent: 'HiSol-Analyst', priority: 3, estimatedTime: 120, dependencies: ['HiSol-Explorer'] }
-      ],
-      finalOutput: `Orchestration complete for: ${request.userInput}`,
-      confidence: 0.85
     };
   }
 }

@@ -1,8 +1,10 @@
-// C-001_ARHAEmotionEngine
+// C-001_EmotionAgent
+// Adapted from: hisol-unified-mcp/src/engines/C-001_ARHAEmotionEngine.ts @ v1.0
 /**
- * ARHA Emotional Language System Based Unified Emotion Processing Engine
+ * ARHA Emotional Language System Based Unified Emotion Processing Agent
  *
- * Responsibility: Integrate existing 3 emotion processing functions (hisol_process + hisol_master_fusion + arha_process)
+ * Responsibility: Integrate existing 3 emotion processing functions
+ *   (hisol_process + hisol_master_fusion + arha_process)
  * Features: Apply practical and intuitive ARHA functional language
  */
 
@@ -16,12 +18,12 @@ import {
   PersonaTrait
 } from '../types/arha-emotion.js';
 
-export class ARHAEmotionEngine {
+export class EmotionAgent {
   private emotionDatabase: Map<string, ARHAEmotionVector> = new Map();
 
   constructor() {
     this.initializeEmotionDatabase();
-    console.log('C-001_ARHAEmotionEngine: Emotion engine initialized');
+    console.log('C-001_EmotionAgent: Emotion agent initialized');
   }
 
   /**
@@ -29,12 +31,11 @@ export class ARHAEmotionEngine {
    */
   async processEmotion(request: ARHAEmotionRequest): Promise<ARHAEmotionResult> {
     try {
-      console.log('C-001_ARHAEmotionEngine: Processing emotion', {
+      console.log('C-001_EmotionAgent: Processing emotion', {
         mode: request.mode,
         inputLength: request.input.length
       });
 
-      // Processing branch according to mode
       switch (request.mode) {
         case 'basic':
           return await this.basicEmotionProcess(request);
@@ -47,7 +48,7 @@ export class ARHAEmotionEngine {
       }
 
     } catch (error) {
-      console.error('C-001_ARHAEmotionEngine: Emotion processing failed', { error });
+      console.error('C-001_EmotionAgent: Emotion processing failed', { error });
       throw new Error(`Emotion processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -57,27 +58,14 @@ export class ARHAEmotionEngine {
    */
   async processARHA7Layer(request: ARHAEmotionRequest): Promise<ARHAProcessResult> {
     try {
-      console.log('C-001_ARHAEmotionEngine: Processing ARHA 7-layer', { input: request.input });
+      console.log('C-001_EmotionAgent: Processing ARHA 7-layer', { input: request.input });
 
-      // 1. Foundation Signals (basic signal analysis)
       const foundationSignals = this.analyzeFoundationSignals(request.input);
-
-      // 2. Dual-Brain Fusion (left brain/right brain fusion)
       const dualBrainFusion = this.processDualBrain(request.input, foundationSignals);
-
-      // 3. Trigger Modes (behavior trigger mode)
       const triggerModes = this.determineTriggerMode(request.input, dualBrainFusion);
-
-      // 4. Language Synthesis (language synthesis)
       const languageSynthesis = this.synthesizeLanguage(request.input, triggerModes.currentMode);
-
-      // 5. Value Chain (value chain)
       const valueChain = this.analyzeValueChain(request.input, request.sessionHistory || []);
-
-      // 6. Persona Vector (persona vector)
       const personaVector = this.calculatePersonaVector(request.input, triggerModes.currentMode);
-
-      // 7. Identity Growth (identity growth)
       const identityGrowth = this.trackIdentityGrowth(request.sessionHistory || []);
 
       const result: ARHAProcessResult = {
@@ -90,18 +78,15 @@ export class ARHAEmotionEngine {
         identityGrowth
       };
 
-      console.log('C-001_ARHAEmotionEngine: ARHA 7-layer processing completed');
+      console.log('C-001_EmotionAgent: ARHA 7-layer processing completed');
       return result;
 
     } catch (error) {
-      console.error('C-001_ARHAEmotionEngine: ARHA 7-layer processing failed', { error });
+      console.error('C-001_EmotionAgent: ARHA 7-layer processing failed', { error });
       throw error;
     }
   }
 
-  /**
-   * Basic emotion processing (replaces old arha_process)
-   */
   private async basicEmotionProcess(request: ARHAEmotionRequest): Promise<ARHAEmotionResult> {
     const emotionVector = this.analyzeEmotionVector(request.input);
     const primaryEmotion = this.detectPrimaryEmotion(emotionVector);
@@ -117,11 +102,7 @@ export class ARHAEmotionEngine {
     };
   }
 
-  /**
-   * Advanced emotion processing (replaces old hisol_process)
-   */
   private async advancedEmotionProcess(request: ARHAEmotionRequest): Promise<ARHAEmotionResult> {
-    const emotionVector = this.analyzeEmotionVector(request.input);
     const contextualEmotion = this.analyzeContextualEmotion(request.input, request.sessionHistory);
     const adaptiveResponse = this.generateAdaptiveResponse(contextualEmotion, request.emotionHint);
 
@@ -136,13 +117,8 @@ export class ARHAEmotionEngine {
     };
   }
 
-  /**
-   * Master fusion processing (replaces old hisol_master_fusion)
-   */
   private async masterFusionProcess(request: ARHAEmotionRequest): Promise<ARHAEmotionResult> {
     const arhaResult = await this.processARHA7Layer(request);
-
-    // Convert 7-layer result to emotion result
     const fusedEmotion = this.fuseARHAResults(arhaResult);
 
     return {
@@ -156,9 +132,6 @@ export class ARHAEmotionEngine {
     };
   }
 
-  /**
-   * Auto mode selection (determine optimal processing method based on input)
-   */
   private async autoSelectProcess(request: ARHAEmotionRequest): Promise<ARHAEmotionResult> {
     const complexity = this.analyzeComplexity(request.input);
 
@@ -171,9 +144,6 @@ export class ARHAEmotionEngine {
     }
   }
 
-  /**
-   * Foundation Signals analysis
-   */
   private analyzeFoundationSignals(input: string) {
     const signals = {
       emotional: this.detectEmotionalSignals(input),
@@ -187,9 +157,6 @@ export class ARHAEmotionEngine {
     };
   }
 
-  /**
-   * Dual-Brain Fusion processing
-   */
   private processDualBrain(input: string, foundationSignals: any) {
     const leftBrain = this.analyzeLogically(input);
     const rightBrain = this.analyzeEmotionally(input);
@@ -198,9 +165,6 @@ export class ARHAEmotionEngine {
     return { leftBrain, rightBrain, fusion };
   }
 
-  /**
-   * Trigger Mode determination
-   */
   private determineTriggerMode(input: string, brainFusion: any): { currentMode: TriggerMode; confidence: number; reasoning: string } {
     const modeScores: Record<TriggerMode, number> = {
       'open_PI': this.calculateOpenPIScore(input),
@@ -218,11 +182,7 @@ export class ARHAEmotionEngine {
     return { currentMode: bestMode, confidence, reasoning };
   }
 
-  /**
-   * Utility methods
-   */
   private initializeEmotionDatabase() {
-    // Initialize basic emotion vectors
     this.emotionDatabase.set('joy', { valence: 0.8, arousal: 0.6, intensity: 0.7 });
     this.emotionDatabase.set('sadness', { valence: -0.6, arousal: 0.2, intensity: 0.6 });
     this.emotionDatabase.set('anger', { valence: -0.7, arousal: 0.9, intensity: 0.8 });
@@ -233,7 +193,6 @@ export class ARHAEmotionEngine {
   }
 
   private analyzeEmotionVector(input: string): ARHAEmotionVector {
-    // Simple emotion vector analysis (actual implementation requires more sophisticated NLP)
     const words = input.toLowerCase().split(' ');
     let valence = 0, arousal = 0, intensity = 0;
 
@@ -291,7 +250,6 @@ export class ARHAEmotionEngine {
     return Math.min(1, (length + sentenceCount / 10 + emotionWords / 5) / 3);
   }
 
-  // Additional helper methods (actual implementation would be more sophisticated)
   private analyzeContextualEmotion(input: string, history?: string[]) {
     return {
       primary: this.detectPrimaryEmotion(this.analyzeEmotionVector(input)),

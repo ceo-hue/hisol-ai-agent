@@ -15,17 +15,17 @@ import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import Anthropic from '@anthropic-ai/sdk';
-import { ARHAEmotionEngine } from './engines/C-001_ARHAEmotionEngine.js';
-import { ARHAAgentEngineV4 } from './engines/C-003_ARHAAgentEngine_V4.js';
-import { APIGatewayContainer } from './containers/C-007_APIGatewayContainer.js';
+import { EmotionAgent } from './agents/C-001_EmotionAgent.js';
+import { PersonaAgent } from './agents/C-003_PersonaAgent.js';
+import { CommandAgent } from './agents/C-004_CommandAgent.js';
 
 const app = express();
 const PORT = process.env.HTTP_PORT || 8080;
 
-// Initialize engines
-const emotionEngine = new ARHAEmotionEngine();
-const agentEngine = new ARHAAgentEngineV4();
-const apiGateway = new APIGatewayContainer({
+// Initialize agents
+const emotionEngine = new EmotionAgent();
+const agentEngine = new PersonaAgent();
+const apiGateway = new CommandAgent({
   claudeApiKey: process.env.CLAUDE_API_KEY,
   claudeBaseUrl: process.env.CLAUDE_API_BASE_URL || 'https://api.anthropic.com',
   maxRetries: 3,
@@ -102,17 +102,17 @@ app.post('/v1/hisol/process', async (req: Request, res: Response) => {
     });
 
     // Step 2: Agent Processing (Persona selection)
-    const agentResult = await agentEngine.processAgent({
+    const agentResult: any = await agentEngine.processAgent({
       request: userInput,
       emotionContext: {
-        valence: emotionResult.emotionalVector?.valence || 0,
-        arousal: emotionResult.emotionalVector?.arousal || 0.5,
+        valence: emotionResult.emotionVector?.valence || 0,
+        arousal: emotionResult.emotionVector?.arousal || 0.5,
         intensity: emotionResult.confidence
       },
       priority: 'medium'
     });
 
-    console.log('[MASTER_FUSION] Agent selected:', agentResult.selectedAgent);
+    console.log('[MASTER_FUSION] Agent selected:', agentResult.selectedAgent || agentResult.agentType);
 
     // Step 3: Build enhanced system prompt
     const systemPrompt = buildMasterFusionPrompt(
@@ -135,7 +135,7 @@ app.post('/v1/hisol/process', async (req: Request, res: Response) => {
         primaryInsight: claudeResponse,
         supportingInsights: [
           `감정 상태: ${emotionResult.primaryEmotion} (신뢰도: ${(emotionResult.confidence * 100).toFixed(0)}%)`,
-          `선택된 페르소나: ${agentResult.selectedAgent}`
+          `선택된 페르소나: ${agentResult.selectedAgent || agentResult.agentType || 'HiSol-Agent'}`
         ],
         actionableRecommendations: agentResult.recommendations || [],
         hisolSignature: '✨ Powered by HiSol ARHA Emotional Intelligence'
@@ -143,12 +143,12 @@ app.post('/v1/hisol/process', async (req: Request, res: Response) => {
       emotionalAnalysis: {
         primaryEmotion: emotionResult.primaryEmotion,
         confidence: emotionResult.confidence,
-        valence: emotionResult.emotionalVector?.valence || 0,
-        arousal: emotionResult.emotionalVector?.arousal || 0.5,
-        culturalResonance: emotionResult.culturalResonance
+        valence: emotionResult.emotionVector?.valence || 0,
+        arousal: emotionResult.emotionVector?.arousal || 0.5,
+        culturalResonance: (emotionResult as any).culturalResonance
       },
       agentInfo: {
-        selectedAgent: agentResult.selectedAgent,
+        selectedAgent: agentResult.selectedAgent || agentResult.agentType || 'HiSol-Agent',
         personality: hisolConfig.personality || 'adaptive'
       },
       meta: {

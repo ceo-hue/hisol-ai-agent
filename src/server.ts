@@ -23,15 +23,11 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 
-import { ARHAEmotionEngine } from './engines/C-001_ARHAEmotionEngine.js';
-import { ARHAAnalyticsEngine } from './engines/C-002_ARHAAnalyticsEngine.js';
-import { ARHAAgentEngineV4 } from './engines/C-003_ARHAAgentEngine_V4.js';
-import { CommandContainer } from './containers/C-004_CommandContainer.js';
-import { OrchestrationContainer } from './containers/C-005_OrchestrationContainer.js';
-import { StatusContainer } from './containers/C-006_StatusContainer.js';
-import { APIGatewayContainer } from './containers/C-007_APIGatewayContainer.js';
-import { HOVCS_ComplianceContainer } from './containers/C-008_VibeComplianceContainer.js';
-import { HOVCS_ComplianceContainerV2 } from './containers/C-008_VibeComplianceContainer_V2.js';
+import { EmotionAgent } from './agents/C-001_EmotionAgent.js';
+import { AnalyticsAgent } from './agents/C-002_AnalyticsAgent.js';
+import { PersonaAgent } from './agents/C-003_PersonaAgent.js';
+import { CommandAgent } from './agents/C-004_CommandAgent.js';
+import { OrchestrationAgent } from './agents/C-005_OrchestrationAgent.js';
 import {
   ARHAEmotionRequest,
   ARHASystemStatus
@@ -39,15 +35,11 @@ import {
 
 export class HiSolUnifiedMCPServer {
   private server: Server;
-  private emotionEngine: ARHAEmotionEngine;
-  private analyticsEngine: ARHAAnalyticsEngine;
-  private agentEngine: ARHAAgentEngineV4;
-  private commandContainer: CommandContainer;
-  private orchestrationContainer: OrchestrationContainer;
-  private statusContainer: StatusContainer;
-  private apiGateway: APIGatewayContainer;
-  private vibeCompliance: HOVCS_ComplianceContainer;
-  private vibeComplianceV2: HOVCS_ComplianceContainerV2;
+  private emotionAgent: EmotionAgent;
+  private analyticsAgent: AnalyticsAgent;
+  private personaAgent: PersonaAgent;
+  private commandAgent: CommandAgent;
+  private orchestrationAgent: OrchestrationAgent;
 
   constructor() {
     console.log('🚀 C-001_HiSolUnifiedMCPServer: Initializing container-based HiSol server');
@@ -67,27 +59,18 @@ export class HiSolUnifiedMCPServer {
       }
     );
 
-    // Initialize container-based engines
-    this.emotionEngine = new ARHAEmotionEngine();
-    this.analyticsEngine = new ARHAAnalyticsEngine();
-    this.agentEngine = new ARHAAgentEngineV4();
-
-    // Initialize container layer
-    this.commandContainer = new CommandContainer();
-    this.orchestrationContainer = new OrchestrationContainer();
-    this.statusContainer = new StatusContainer();
-
-    // Initialize new containers
-    this.apiGateway = new APIGatewayContainer({
+    // Initialize agent layer (C-001 ~ C-005)
+    this.emotionAgent = new EmotionAgent();
+    this.analyticsAgent = new AnalyticsAgent();
+    this.personaAgent = new PersonaAgent();
+    this.commandAgent = new CommandAgent({
       claudeApiKey: process.env.CLAUDE_API_KEY,
       claudeBaseUrl: process.env.CLAUDE_API_BASE_URL || 'https://api.anthropic.com',
       maxRetries: 3,
       timeoutMs: 30000,
       rateLimitPerMinute: 60
     });
-
-    this.vibeCompliance = new HOVCS_ComplianceContainer();
-    this.vibeComplianceV2 = new HOVCS_ComplianceContainerV2();
+    this.orchestrationAgent = new OrchestrationAgent();
 
     this.setupMCPHandlers();
     console.log('✅ C-001_HiSolUnifiedMCPServer: All containers initialized');
@@ -376,13 +359,13 @@ export class HiSolUnifiedMCPServer {
       sessionHistory: args.sessionHistory
     };
 
-    const result = await this.emotionEngine.processEmotion(request);
+    const result = await this.emotionAgent.processEmotion(request);
 
     return {
       content: [{
         type: 'text',
         text: JSON.stringify({
-          container: 'C-001_ARHAEmotionEngine',
+          container: 'C-001_EmotionAgent',
           qualityGrade: this.calculateQualityGrade(result),
           timestamp: new Date().toISOString(),
           result
@@ -392,7 +375,7 @@ export class HiSolUnifiedMCPServer {
   }
 
   private async handleAnalytics(args: any) {
-    const result = await this.analyticsEngine.analyze({
+    const result = await this.analyticsAgent.analyze({
       analysisType: args.analysisType,
       timeframe: args.timeframe || 'current',
       sessionData: args.includeHistory ? {} : undefined,
@@ -403,7 +386,7 @@ export class HiSolUnifiedMCPServer {
       content: [{
         type: 'text',
         text: JSON.stringify({
-          container: 'C-002_ARHAAnalyticsEngine',
+          container: 'C-002_AnalyticsAgent',
           qualityGrade: this.calculateQualityGrade(result),
           timestamp: new Date().toISOString(),
           result
@@ -413,7 +396,7 @@ export class HiSolUnifiedMCPServer {
   }
 
   private async handleAgent(args: any) {
-    const result = await this.agentEngine.processAgent({
+    const result = await this.personaAgent.processAgent({
       request: args.request,
       agentType: args.agentName,
       emotionContext: args.emotionContext,
@@ -424,7 +407,7 @@ export class HiSolUnifiedMCPServer {
       content: [{
         type: 'text',
         text: JSON.stringify({
-          container: 'C-003_ARHAAgentEngineV4',
+          container: 'C-003_PersonaAgent',
           qualityGrade: this.calculateQualityGrade(result),
           timestamp: new Date().toISOString(),
           result
@@ -436,12 +419,12 @@ export class HiSolUnifiedMCPServer {
   private async handleAgentPersonas(args: any) {
     if (args.persona) {
       // Get specific persona info
-      const personaInfo = this.agentEngine.getPersonaInfo(args.persona as any);
+      const personaInfo = this.personaAgent.getPersonaInfo(args.persona as any);
       return {
         content: [{
           type: 'text',
           text: JSON.stringify({
-            container: 'C-003_ARHAAgentEngineV4',
+            container: 'C-003_PersonaAgent',
             persona: args.persona,
             info: personaInfo,
             timestamp: new Date().toISOString()
@@ -450,12 +433,12 @@ export class HiSolUnifiedMCPServer {
       };
     } else {
       // Get all available personas
-      const personas = this.agentEngine.getAvailablePersonas();
+      const personas = this.personaAgent.getAvailablePersonas();
       return {
         content: [{
           type: 'text',
           text: JSON.stringify({
-            container: 'C-003_ARHAAgentEngineV4',
+            container: 'C-003_PersonaAgent',
             totalPersonas: personas.length,
             personas: personas,
             timestamp: new Date().toISOString()
@@ -466,8 +449,7 @@ export class HiSolUnifiedMCPServer {
   }
 
   private async handleCommand(args: any) {
-    // Redirect to C-004 CommandContainer (legacy compatibility)
-    const result = await this.commandContainer.executeCommand({
+    const result = await this.commandAgent.executeCommand({
       userIntent: args.userIntent,
       commandType: args.commandType,
       parameters: args.parameters,
@@ -478,7 +460,7 @@ export class HiSolUnifiedMCPServer {
       content: [{
         type: 'text',
         text: JSON.stringify({
-          container: 'C-004_CommandContainer',
+          container: 'C-004_CommandAgent',
           qualityGrade: result.qualityGrade,
           timestamp: new Date().toISOString(),
           result
@@ -488,7 +470,7 @@ export class HiSolUnifiedMCPServer {
   }
 
   private async handleAPIGateway(args: any) {
-    const result = await this.apiGateway.processRequest({
+    const result = await this.commandAgent.processRequest({
       userInput: args.userInput,
       mode: args.mode || 'auto',
       sessionHistory: args.sessionHistory,
@@ -499,7 +481,7 @@ export class HiSolUnifiedMCPServer {
       content: [{
         type: 'text',
         text: JSON.stringify({
-          container: 'C-007_APIGatewayContainer',
+          container: 'C-004_CommandAgent',
           qualityGrade: result.meta.quality_grade,
           timestamp: new Date().toISOString(),
           result
@@ -509,7 +491,7 @@ export class HiSolUnifiedMCPServer {
   }
 
   private async handleVibeCompliance(args: any) {
-    const result = await this.vibeCompliance.applyEngineering({
+    const result = await this.orchestrationAgent.applyVibeEngineering({
       targetPath: args.targetPath,
       analysisDepth: args.analysisDepth,
       complianceLevel: args.complianceLevel,
@@ -520,7 +502,7 @@ export class HiSolUnifiedMCPServer {
       content: [{
         type: 'text',
         text: JSON.stringify({
-          container: 'C-008_VibeComplianceContainer',
+          container: 'C-005_OrchestrationAgent',
           qualityGrade: result.qualityGrade,
           timestamp: new Date().toISOString(),
           result
@@ -530,7 +512,7 @@ export class HiSolUnifiedMCPServer {
   }
 
   private async handleVibeValidateCode(args: any) {
-    const result = await this.vibeComplianceV2.validateCode({
+    const result = await this.orchestrationAgent.validateCode({
       targetPath: args.targetPath,
       files: args.files,
       code: args.code,
@@ -544,7 +526,7 @@ export class HiSolUnifiedMCPServer {
       content: [{
         type: 'text',
         text: JSON.stringify({
-          container: 'C-008_VibeComplianceContainerV2',
+          container: 'C-005_OrchestrationAgent',
           qualityGrade: result.overallStatus === 'pass' ? 'A' : result.overallStatus === 'warning' ? 'B+' : 'C',
           timestamp: new Date().toISOString(),
           result
@@ -554,7 +536,7 @@ export class HiSolUnifiedMCPServer {
   }
 
   private async handleCommandExecute(args: any) {
-    const result = await this.commandContainer.executeCommand({
+    const result = await this.commandAgent.executeCommand({
       userIntent: args.userIntent,
       commandType: args.commandType,
       parameters: args.parameters,
@@ -565,7 +547,7 @@ export class HiSolUnifiedMCPServer {
       content: [{
         type: 'text',
         text: JSON.stringify({
-          container: 'C-004_CommandContainer',
+          container: 'C-004_CommandAgent',
           qualityGrade: result.qualityGrade,
           timestamp: new Date().toISOString(),
           result
@@ -575,7 +557,7 @@ export class HiSolUnifiedMCPServer {
   }
 
   private async handleOrchestrate(args: any) {
-    const result = await this.orchestrationContainer.orchestrateContainers({
+    const result = await this.orchestrationAgent.orchestrateContainers({
       userInput: args.userInput,
       requiredContainers: args.requiredContainers,
       priority: args.priority,
@@ -586,7 +568,7 @@ export class HiSolUnifiedMCPServer {
       content: [{
         type: 'text',
         text: JSON.stringify({
-          container: 'C-005_OrchestrationContainer',
+          container: 'C-005_OrchestrationAgent',
           qualityGrade: result.qualityGrade,
           timestamp: new Date().toISOString(),
           result
@@ -596,7 +578,7 @@ export class HiSolUnifiedMCPServer {
   }
 
   private async handleStatusDetailed(args: any) {
-    const result = await this.statusContainer.getSystemStatus({
+    const result = await this.analyticsAgent.getSystemStatus({
       includeDetails: args.includeDetails,
       containerFilter: args.containerFilter,
       timeframe: args.timeframe,
@@ -607,7 +589,7 @@ export class HiSolUnifiedMCPServer {
       content: [{
         type: 'text',
         text: JSON.stringify({
-          container: 'C-006_StatusContainer',
+          container: 'C-002_AnalyticsAgent',
           qualityGrade: result.qualityGrade,
           timestamp: new Date().toISOString(),
           result
@@ -633,17 +615,14 @@ export class HiSolUnifiedMCPServer {
     };
 
     const containerStatuses = {
-      'C-001': 'ARHAEmotionEngine - Healthy',
-      'C-002': 'ARHAAnalyticsEngine - Healthy',
-      'C-003': 'ARHAAgentEngine - Healthy',
-      'C-004': this.commandContainer.getStatus(),
-      'C-005': this.orchestrationContainer.getStatus(),
-      'C-006': this.statusContainer.getStatus(),
-      'C-007': this.apiGateway.getStatus(),
-      'C-008': this.vibeCompliance.getSystemStatus()
+      'C-001': 'EmotionAgent - Healthy',
+      'C-002': this.analyticsAgent.getStatus(),
+      'C-003': 'PersonaAgent - Healthy',
+      'C-004': this.commandAgent.getStatus(),
+      'C-005': this.orchestrationAgent.getStatus()
     };
 
-    const vibeValidation = await this.vibeCompliance.validateArchitecture();
+    const vibeValidation = await this.orchestrationAgent.validateArchitecture();
 
     return {
       content: [{
