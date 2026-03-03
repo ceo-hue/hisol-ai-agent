@@ -28,6 +28,7 @@ import { AnalyticsAgent } from './agents/C-002_AnalyticsAgent.js';
 import { PersonaAgent } from './agents/C-003_PersonaAgent.js';
 import { CommandAgent } from './agents/C-004_CommandAgent.js';
 import { OrchestrationAgent } from './agents/C-005_OrchestrationAgent.js';
+import { MemoryAgent } from './agents/C-006_MemoryAgent.js';
 import {
   ARHAEmotionRequest,
   ARHASystemStatus
@@ -40,9 +41,10 @@ export class HiSolUnifiedMCPServer {
   private personaAgent: PersonaAgent;
   private commandAgent: CommandAgent;
   private orchestrationAgent: OrchestrationAgent;
+  private memoryAgent: MemoryAgent;
 
   constructor() {
-    console.log('🚀 C-001_HiSolUnifiedMCPServer: Initializing container-based HiSol server');
+    console.log('?? C-001_HiSolUnifiedMCPServer: Initializing container-based HiSol server');
 
     this.server = new Server(
       {
@@ -70,10 +72,11 @@ export class HiSolUnifiedMCPServer {
       timeoutMs: 30000,
       rateLimitPerMinute: 60
     });
-    this.orchestrationAgent = new OrchestrationAgent();
+    this.memoryAgent = new MemoryAgent\(\);
+    this.orchestrationAgent = new OrchestrationAgent\(this.memoryAgent\);
 
     this.setupMCPHandlers();
-    console.log('✅ C-001_HiSolUnifiedMCPServer: All containers initialized');
+    console.log('??C-001_HiSolUnifiedMCPServer: All containers initialized');
   }
 
   private setupMCPHandlers(): void {
@@ -655,9 +658,9 @@ export class HiSolUnifiedMCPServer {
 
   async start(): Promise<void> {
     const transport = new StdioServerTransport();
-    console.log('🌟 C-001_HiSolUnifiedMCPServer: Starting container-based HiSol MCP server...');
+    console.log('?�� C-001_HiSolUnifiedMCPServer: Starting container-based HiSol MCP server...');
     await this.server.connect(transport);
-    console.log('✅ C-001_HiSolUnifiedMCPServer: Container-based server running with vibe-coding compliance');
+    console.log('??C-001_HiSolUnifiedMCPServer: Container-based server running with vibe-coding compliance');
   }
 }
 

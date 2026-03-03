@@ -8,6 +8,7 @@
  */
 
 import { createLogger, logTiming, logBatch, type LogLevel } from '../utils/logger.js';
+import { MemoryAgent } from './C-006_MemoryAgent.js';
 
 // ============================================================================
 // ORCHESTRATION TYPES (from C-005)
@@ -135,7 +136,7 @@ export interface DependencyImpact {
 }
 
 // ============================================================================
-// ORCHESTRATION AGENT — merged C-005 + C-008 V1 + C-008 V2
+// ORCHESTRATION AGENT ??merged C-005 + C-008 V1 + C-008 V2
 // ============================================================================
 
 export class OrchestrationAgent {
@@ -144,12 +145,14 @@ export class OrchestrationAgent {
   private circuitBreakerOpen = false;
   private failureCount = 0;
   private readonly MAX_FAILURES = 3;
+  private memoryAgent: MemoryAgent;
 
   private readonly logger = createLogger('C-005');
 
-  constructor() {
+  constructor(memoryAgent: MemoryAgent) {
+    this.memoryAgent = memoryAgent;
     this.initializeContainerRegistry();
-    this.logger.info('OrchestrationAgent initialized', {
+    this.logger.info('OrchestrationAgent initialized with Value Chain Memory', {
       orchestration: true,
       vibeCompliance: true,
       codeValidation: true
@@ -176,17 +179,31 @@ export class OrchestrationAgent {
         containers: request.requiredContainers
       });
 
+      const valueContext = await this.memoryAgent.getValueDecision(request.userInput);
       const taskAnalysis = this.analyzeTask(request.userInput);
       const selectedContainers = request.requiredContainers || this.selectOptimalContainers(taskAnalysis);
       const executionPlan = this.createParallelExecutionPlan(taskAnalysis, selectedContainers);
-      const containerResults = await this.executeContainersInParallel(executionPlan);
-      const finalOutput = this.integrateContainerResults(containerResults, request);
-      const confidence = this.calculateOrchestrationConfidence(containerResults);
-      const qualityGrade = this.calculateQualityGrade(containerResults, Date.now() - startTime);
-
-      this.failureCount = 0;
-      this.circuitBreakerOpen = false;
-
+              const containerResults = await this.executeContainersInParallel(executionPlan);
+              const finalOutput = this.integrateContainerResults(containerResults, request);
+              const confidence = this.calculateOrchestrationConfidence(containerResults);
+              let qualityGrade = this.calculateQualityGrade(containerResults, Date.now() - startTime);
+      
+              // [Self-Refinement Loop] 품질 등급이 낮으면 가치사슬을 바탕으로 1회 재시도
+              if ((qualityGrade === 'C' || qualityGrade === 'B') && !((request as any)._isRetry)) {
+                this.logger.warn('Quality below standard. Initiating value-driven refinement...', { grade: qualityGrade });
+                
+                // 가치사슬을 반영하여 요청을 정교화
+                const refinedRequest = {
+                  ...request,
+                  userInput: `${request.userInput} (Focus on: ${valueContext.primaryValues.join(', ')})`,
+                  _isRetry: true
+                } as any;
+      
+                return this.orchestrateContainers(refinedRequest);
+              }
+      
+              this.failureCount = 0;
+              this.circuitBreakerOpen = false;
       const response: OrchestrationResponse = {
         orchestrationResult: {
           taskAnalysis,
@@ -200,6 +217,7 @@ export class OrchestrationAgent {
         qualityGrade
       };
 
+      await this.autoExtractAndStoreValues(request.userInput, finalOutput);
       this.storeExecutionHistory(response);
 
       this.logger.info('Orchestration completed', {
@@ -218,7 +236,7 @@ export class OrchestrationAgent {
   }
 
   // ==========================================================================
-  // VIBE COMPLIANCE — ENGINEERING STANDARDS (from C-008 V1)
+  // VIBE COMPLIANCE ??ENGINEERING STANDARDS (from C-008 V1)
   // ==========================================================================
 
   /**
@@ -334,7 +352,7 @@ export class OrchestrationAgent {
   // ==========================================================================
 
   /**
-   * Main validation — 5 practical stages
+   * Main validation ??5 practical stages
    */
   async validateCode(context: CodeContext): Promise<ValidationPipeline> {
     const startTime = Date.now();
@@ -424,7 +442,7 @@ export class OrchestrationAgent {
   }
 
   // ==========================================================================
-  // PRIVATE — ORCHESTRATION HELPERS (C-005)
+  // PRIVATE ??ORCHESTRATION HELPERS (C-005)
   // ==========================================================================
 
   private analyzeTask(userInput: string): any {
@@ -540,12 +558,12 @@ export class OrchestrationAgent {
   }
 
   private assessAnalyticalNeeds(input: string): number {
-    const analyticalWords = ['analyze', 'study', 'research', 'examine', '분석', '연구'];
+    const analyticalWords = ['analyze', 'study', 'research', 'examine', '분석', '?�구'];
     return Math.min(1, analyticalWords.filter(w => input.toLowerCase().includes(w)).length / 2);
   }
 
   private identifyCommandRequirements(input: string): number {
-    const commandWords = ['execute', 'run', 'implement', 'create', '실행', '구현'];
+    const commandWords = ['execute', 'run', 'implement', 'create', '?�행', '구현'];
     return Math.min(1, commandWords.filter(w => input.toLowerCase().includes(w)).length / 2);
   }
 
@@ -615,7 +633,7 @@ export class OrchestrationAgent {
   }
 
   // ==========================================================================
-  // PRIVATE — VIBE COMPLIANCE HELPERS (C-008 V1)
+  // PRIVATE ??VIBE COMPLIANCE HELPERS (C-008 V1)
   // ==========================================================================
 
   private evaluateHOVCSCompliance(request: VibeComplianceRequest): number {
@@ -651,9 +669,9 @@ export class OrchestrationAgent {
   private buildImprovementPlan(violations: string[], recommendations: string[]): string[] {
     return [
       'Phase 1: Address critical violations',
-      ...violations.map(v => `  → Fix: ${v}`),
+      ...violations.map(v => `  ??Fix: ${v}`),
       'Phase 2: Apply recommendations',
-      ...recommendations.slice(0, 3).map(r => `  → ${r}`),
+      ...recommendations.slice(0, 3).map(r => `  ??${r}`),
       'Phase 3: Validate with HOVCS 2.0 certification criteria'
     ];
   }
@@ -673,7 +691,7 @@ export class OrchestrationAgent {
   }
 
   // ==========================================================================
-  // PRIVATE — CODE VALIDATION STAGES (C-008 V2)
+  // PRIVATE ??CODE VALIDATION STAGES (C-008 V2)
   // ==========================================================================
 
   private async checkSpecification(context: CodeContext): Promise<StageResult> {
@@ -935,7 +953,7 @@ export class OrchestrationAgent {
   }
 
   // ==========================================================================
-  // PRIVATE — CODE ANALYSIS HELPERS (C-008 V2)
+  // PRIVATE ??CODE ANALYSIS HELPERS (C-008 V2)
   // ==========================================================================
 
   private analyzeCodePatterns(code: string, _language: string): {
@@ -1175,6 +1193,17 @@ export class OrchestrationAgent {
     const stagesSummary = pipeline.stages.map(s => `${s.stage}: ${s.status} (${(s.score * 100).toFixed(0)}%)`).join('\n');
     const allIssues = pipeline.stages.flatMap(s => s.issues);
     const allRecommendations = pipeline.stages.flatMap(s => s.recommendations);
-    return `V2 Validation Summary\n=====================\nOverall: ${pipeline.overallStatus} (${(pipeline.overallScore * 100).toFixed(1)}%)\nTime: ${pipeline.totalTimeMs}ms\n\nStages:\n${stagesSummary}\n\n${allIssues.length > 0 ? `Issues:\n${allIssues.map((i, idx) => `${idx + 1}. ${i}`).join('\n')}` : '✅ No issues found'}\n\n${allRecommendations.length > 0 ? `\nRecommendations:\n${allRecommendations.slice(0, 5).map((r, idx) => `${idx + 1}. ${r}`).join('\n')}` : ''}`.trim();
+    return `V2 Validation Summary\n=====================\nOverall: ${pipeline.overallStatus} (${(pipeline.overallScore * 100).toFixed(1)}%)\nTime: ${pipeline.totalTimeMs}ms\n\nStages:\n${stagesSummary}\n\n${allIssues.length > 0 ? `Issues:\n${allIssues.map((i, idx) => `${idx + 1}. ${i}`).join('\n')}` : '??No issues found'}\n\n${allRecommendations.length > 0 ? `\nRecommendations:\n${allRecommendations.slice(0, 5).map((r, idx) => `${idx + 1}. ${r}`).join('\n')}` : ''}`.trim();
   }
+}
+
+  private async autoExtractAndStoreValues(input: string, output: string): Promise<void> {
+    const targetValues = ['����', '����', 'Ȯ�强', 'UX', 'ǰ��', '�ӵ�', '������', '������', '������'];
+    const found = targetValues.filter(v => input.toLowerCase().includes(v.toLowerCase()) || output.toLowerCase().includes(v.toLowerCase()));
+    if (found.length > 0) {
+      await this.memoryAgent.accumulateValue(found);
+      this.logger.info('Automatic value chain accumulation', { terms: found });
+    }
+  }
+
 }

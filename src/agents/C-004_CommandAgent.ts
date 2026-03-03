@@ -9,13 +9,15 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
-// â”€â”€ Command Types (from C-004) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ?€?€ Command Types (from C-004) ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
 
 export interface CommandRequest {
   userIntent: string;
-  commandType?: 'hisol_explore' | 'hisol_analyze' | 'hisol_implement';
-  parameters?: any;
+  commandType?: 'hisol_explore' | 'hisol_analyze' | 'hisol_implement' | 'hisol_filesystem' | 'hisol_search';
+  parameters?: { action: 'read' | 'write' | 'list' | 'delete'; path: string; content?: string };
   priority?: 'low' | 'medium' | 'high';
 }
 
@@ -29,7 +31,7 @@ export interface CommandResponse {
   qualityGrade: 'A' | 'B+' | 'B' | 'C';
 }
 
-// â”€â”€ API Gateway Types (from C-007) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ?€?€ API Gateway Types (from C-007) ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
 
 export interface APIGatewayConfig {
   claudeApiKey?: string;
@@ -62,7 +64,7 @@ export interface APIResponse {
   error?: string;
 }
 
-// â”€â”€ Command Agent â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ?€?€ Command Agent ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
 
 export class CommandAgent {
   // Command state
@@ -100,7 +102,7 @@ export class CommandAgent {
     console.log('C-004_CommandAgent: Command + API Gateway agent initialized');
   }
 
-  // â”€â”€ Command Execution (C-004) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ?€?€ Command Execution (C-004) ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
 
   async executeCommand(request: CommandRequest): Promise<CommandResponse> {
     const startTime = Date.now();
@@ -128,7 +130,19 @@ export class CommandAgent {
           nextSteps = ['Analyze findings', 'Generate implementation plan'];
           break;
 
-        case 'hisol_analyze':
+                  case 'hisol_filesystem':
+            executionResult = await this.executeFileSystemCommand(request);
+            output = 'File system operation completed';
+            nextSteps = ['Verify changes', 'Update documentation'];
+            break;
+
+                    case 'hisol_search':
+            executionResult = await this.executeSearchCommand(request);
+            output = 'Web search completed and results analyzed';
+            nextSteps = ['Incorporate findings into plan', 'Refine implementation strategy'];
+            break;
+
+          case 'hisol_analyze':
           executionResult = await this.executeAnalyzeCommand(request);
           output = 'Analysis completed with systematic breakdown';
           nextSteps = ['Review analysis', 'Plan implementation strategy'];
@@ -186,7 +200,7 @@ export class CommandAgent {
     }
   }
 
-  // â”€â”€ API Gateway (C-007) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ?€?€ API Gateway (C-007) ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
 
   async processRequest(request: APIRequest): Promise<APIResponse> {
     const startTime = Date.now();
@@ -258,7 +272,7 @@ export class CommandAgent {
     };
   }
 
-  // â”€â”€ Private: Command helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ?€?€ Private: Command helpers ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
 
   private async executeExploreCommand(request: CommandRequest): Promise<any> {
     const consciousnessState = this.determineConsciousnessState(request.userIntent);
@@ -268,14 +282,14 @@ export class CommandAgent {
       consciousnessState,
       results: {
         discoveryPaths: [
-          `ğŸŒŸ Creative exploration of "${request.userIntent}"`,
-          `ğŸ”— Connection patterns and fusion opportunities`,
-          `ğŸš€ Future possibility expansion vectors`
+          `?ŒŸ Creative exploration of "${request.userIntent}"`,
+          `?”— Connection patterns and fusion opportunities`,
+          `?? Future possibility expansion vectors`
         ],
         creativeAngles: [
-          `ğŸ¨ Artistic interpretation approach`,
-          `ğŸ”„ Inverted perspective analysis`,
-          `ğŸ® Gamification potential assessment`
+          `?¨ Artistic interpretation approach`,
+          `?”„ Inverted perspective analysis`,
+          `?® Gamification potential assessment`
         ],
         possibilitySpace: {
           knownPossibilities: [`Current known approaches for "${request.userIntent}"`],
@@ -285,8 +299,8 @@ export class CommandAgent {
         }
       },
       emotionalResonance: this.calculateEmotionalResonance(request.userIntent),
-      enhancement: `ğŸŒŠ Creative exploration mode activated for "${request.userIntent}"`,
-      nextRecommendation: `ğŸ” Transition to analysis mode or ğŸš€ proceed to implementation`
+      enhancement: `?ŒŠ Creative exploration mode activated for "${request.userIntent}"`,
+      nextRecommendation: `?” Transition to analysis mode or ?? proceed to implementation`
     };
   }
 
@@ -315,11 +329,11 @@ export class CommandAgent {
         }
       },
       recommendations: [
-        `ğŸ” Create detailed requirements specification for "${request.userIntent}"`,
-        `âš™ï¸ Conduct technical feasibility assessment`,
-        `âš ï¸ Develop risk assessment matrix`
+        `?” Create detailed requirements specification for "${request.userIntent}"`,
+        `?™ï¸ Conduct technical feasibility assessment`,
+        `? ï¸ Develop risk assessment matrix`
       ],
-      containerSignature: `ğŸ” C-004 Command Mode - Systematic Analysis Execution`
+      containerSignature: `?” C-004 Command Mode - Systematic Analysis Execution`
     };
   }
 
@@ -339,7 +353,7 @@ export class CommandAgent {
         approach: 'Iterative development with continuous validation',
         methodology: 'Agile with container-based architecture'
       },
-      containerSignature: `ğŸš€ C-004 Command Mode - Implementation Execution`
+      containerSignature: `?? C-004 Command Mode - Implementation Execution`
     };
   }
 
@@ -397,7 +411,7 @@ export class CommandAgent {
     return 'HIGH';
   }
 
-  // â”€â”€ Private: API Gateway helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ?€?€ Private: API Gateway helpers ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
 
   private async processHiSolRequest(request: APIRequest): Promise<any> {
     if (!this.claude) {
@@ -516,7 +530,7 @@ Use warm, caring language with natural emotional expressions.`;
   }
 
   private detectEmotionalContent(input: string): number {
-    const emotionalKeywords = ['ê¸°ì˜', 'ìŠ¬í”„', 'í™”ë‚˜', 'ê±±ì •', 'í–‰ë³µ', 'ìš°ìš¸', 'happy', 'sad', 'angry', 'worried'];
+    const emotionalKeywords = ['ê¸°ì˜', '?¬í”„', '?”ë‚˜', 'ê±±ì •', '?‰ë³µ', '?°ìš¸', 'happy', 'sad', 'angry', 'worried'];
     const matches = emotionalKeywords.filter(keyword => input.toLowerCase().includes(keyword.toLowerCase())).length;
     return Math.min(1, matches / 3);
   }
@@ -525,9 +539,9 @@ Use warm, caring language with natural emotional expressions.`;
     return {
       combinedInsights: {
         synergisticInsights: [
-          'ğŸ§  HiSol ARHA: Processing with emotional intelligence',
-          `ğŸ’­ Analyzing: "${userInput}" with deep understanding`,
-          'âœ¨ Response generated with warmth and empathy'
+          '?§  HiSol ARHA: Processing with emotional intelligence',
+          `?’­ Analyzing: "${userInput}" with deep understanding`,
+          '??Response generated with warmth and empathy'
         ],
         emotionalResonance: { valence: 0.8, arousal: 0.6, intensity: 0.7 },
         recommendedApproach: 'Emotionally intelligent agent-based processing'
@@ -556,4 +570,56 @@ Use warm, caring language with natural emotional expressions.`;
       error: errorMessage
     };
   }
+}
+
+  private async executeFileSystemCommand(request: CommandRequest): Promise<any> {
+    const { action, path: targetPath, content } = request.parameters || {};
+    if (!action || !targetPath) throw new Error('Action and path are required for filesystem commands');
+
+    const fullPath = path.resolve(process.cwd(), targetPath);
+    if (!fullPath.startsWith(process.cwd())) throw new Error('Access denied: Path is outside workspace');
+
+    let result;
+    switch (action) {
+      case 'read':
+        result = await fs.readFile(fullPath, 'utf-8');
+        break;
+      case 'write':
+        if (!content) throw new Error('Content is required for write operation');
+        await fs.writeFile(fullPath, content);
+        result = 'File written successfully';
+        break;
+      case 'list':
+        result = await fs.readdir(fullPath);
+        break;
+      default:
+        throw new Error('Unsupported filesystem action');
+    }
+
+    return { command: 'hisol_filesystem', action, path: targetPath, result };
+  }
+
+}
+
+  private async executeSearchCommand(request: CommandRequest): Promise<any> {
+    const query = request.userIntent || request.parameters?.query;
+    if (!query) throw new Error('Search query is required');
+
+    this.logger.info('Executing web search interface', { query });
+
+    // [ÀÎÅÍÆäÀÌ½º ¼³°è] ½ÇÁ¦ ¿¬µ¿ ½Ã ÀÌ°÷¿¡ fetch(SEARCH_API_URL) ·ÎÁ÷ÀÌ µé¾î°©/´Ï´Ù.
+    // ÇöÀç´Â API Å°°¡ ¾ø´Â »óÅÂÀÌ¹Ç·Î °á°ú ±¸Á¶¸¸ Á¤ÀÇÇØ µÓ´Ï´Ù.
+    const mockResults = [
+      { title: 'Search Result 1', snippet: 'Content related to ' + query, link: 'https://example.com/1' },
+      { title: 'Search Result 2', snippet: 'More details about ' + query, link: 'https://example.com/2' }
+    ];
+
+    return { 
+      command: 'hisol_search', 
+      query, 
+      results: mockResults,
+      message: 'Search interface ready. Connect your Search API key in .env to enable live search.'
+    };
+  }
+
 }
