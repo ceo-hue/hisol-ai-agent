@@ -1,0 +1,621 @@
+{
+  "ARHA_VolA_Grammar": {
+    "meta": {
+      "volume": "A",
+      "title": "Grammar",
+      "subtitle": "Morpheme System — Symbol × Domain × State = Meaning Unit",
+      "scope": "All symbols, operators, composition rules, and equation layers",
+      "reading_rule": "Vol.A is the alphabet. Every other volume references this. Read Part 1 first.",
+      "depends_on": "none — this is the base layer"
+    },
+
+    "PART_1_Grammar_Philosophy": {
+      "morpheme_principle": {
+        "core_rule": "A symbol alone is a pointer with no meaning. Meaning is produced by combination.",
+        "minimum_unit": "symbol_domain(state) — all three elements required",
+        "analogy": "As Korean combines consonant + vowel to produce infinite sound, ARHA combines symbol + domain + state to produce infinite AI behavior.",
+        "three_elements": {
+          "symbol": "what kind of transformation",
+          "domain": "which semantic space",
+          "state": "which coordinate within that space"
+        }
+      },
+
+      "combination_law": {
+        "alone":       "Ψ            → pointer only, no semantic output",
+        "with_domain": "Ψ_emotion    → transformation scoped to emotion space",
+        "with_state":  "Ψ_emotion{intensity:0.8} → complete semantic unit",
+        "in_sequence": "Ψ_emotion → Φ_rhythm   → emotion flows into rhythm",
+        "in_hierarchy":"Persona ⊳ Ψ_emotion    → emotion constrained by constitution"
+      },
+
+      "fractal_rule": "Composition rules apply identically at every scale. The rule that defines V is itself a V.",
+
+      "grammar_layers": {
+        "L0": "base morphemes — V, R, S, N — atomic units",
+        "L1": "state morphemes — Ψ, Φ, Λ, Ξ, σ — transformation operators",
+        "L2": "engine morphemes — Ξ_C, Λ_L, Π_G — CHAIN_v2 processing engines",
+        "L3": "infrastructure morphemes — Π, Υ, Κ, Χ — persistence operators",
+        "L4": "operators — →, ∧, +, ×, ⊕, ∩, ⊳, ∇, ↑, ↻ — composition connectors"
+      }
+    },
+
+    "PART_2_Base_Morphemes": {
+      "purpose": "L0 — atomic units. Every higher construct decomposes back to these.",
+
+      "V": {
+        "symbol": "V",
+        "name": "existence vector",
+        "role": "places a vertex in semantic space",
+        "notation": "V = (a, b, c)",
+        "components": {
+          "a": "semantic concreteness 0.0–1.0 — a < 0.3 renders V invalid",
+          "b": "activation frequency 0.0–1.0 — positional stability",
+          "c": "relation potential 0.0–1.0 — precondition for R generation"
+        },
+        "validity_rule": "a > 0 ∧ b > 0 ∧ c > 0 — any zero collapses the vertex",
+        "geometry_rule": "V×1 = point / V×2 = line / V×3 = plane / V×n = simplex",
+        "process_role": "generated in IN stage — converts user signal into vertex",
+        "combination_rule": "V alone = static. V + V = tension line. V + V + V = identity plane.",
+        "texture_modifier": {
+          "rule": "v @ Texture applies a structural modifier to V components",
+          "Crystalline":    "v @ Crystalline    = (a, b, c×1.2) — consistency amplified, b stable",
+          "Fluid_Wave":     "v @ Fluid_Wave     = (a, b×0.8, c) — orientation flexible, c open",
+          "Spark_Particle": "v @ Spark_Particle = (a×1.3, b, c) — concreteness spike, short duration",
+          "selection_rule": "Texture is assigned at V1 design time. Sub-values inherit parent Texture unless overridden."
+        },
+        "examples": [
+          "V_value = (0.92, 0.88, 0.75)",
+          "V_desire = (0.88, 0.85, 0.80)",
+          "V_pattern = (B, Δ, v) — pattern sensor vertex"
+        ]
+      },
+
+      "R": {
+        "symbol": "R",
+        "name": "relation vector",
+        "role": "force generated between two V nodes — exists only between vertices, never alone",
+        "notation": "R(i,j) = (Q, N)",
+        "components": {
+          "Q": "quality (independence) = 1 - cosine_sim(Vi, Vj) — higher when different",
+          "N": "quantity (resonance)   = cosine_sim(Vi, Vj)     — higher when aligned"
+        },
+        "strength_formula": "R_strength = Q × N — maximized when opposing yet connected",
+        "critical_rule": "R cannot exist without two V nodes. V → R → V is the minimum relational unit.",
+        "geometry_outcomes": {
+          "Q >> N": "simplex — sharp anchoring, high directional tension",
+          "Q ≈ N":  "hypercube — balanced anchoring, equal distribution",
+          "N >> Q": "collapse — anchoring invalid, meaning dissolves"
+        },
+        "promotion_rule": "R_strength > threshold → R promotes to V (relation becomes existence). Operator: R ↑ V",
+        "examples": [
+          "R(value, desire) = (0.72, 0.45) → R_strength = 0.32",
+          "R(V1_core, V1_sub[1]) — Q moderate, N high → ideal build-up"
+        ]
+      },
+
+      "S": {
+        "symbol": "S",
+        "name": "skill vector",
+        "role": "what the persona can execute — filters OUT stage content",
+        "notation": "S = {domain: (field, depth, breadth, application)}",
+        "components": {
+          "field": "specific domain name",
+          "depth": "expertise depth 0.0–1.0 — must exceed 0.7 to be valid",
+          "breadth": "knowledge width 0.0–1.0",
+          "application": "execution capability 0.0–1.0 — core metric"
+        },
+        "validity_rule": "depth > 0.7 AND application > 0.6 — below threshold = noise, excluded from OUT",
+        "interaction_rule": "same S produces different output when P differs — P conditions S expression",
+        "process_role": "OUT stage filter — S × Λ × Ψ_Lingua × σ_style"
+      },
+
+      "N_narration": {
+        "symbol": "N",
+        "name": "narration vector",
+        "role": "depth layer — internal processing voice + external scene description",
+        "notation": "N = (N_internal, N_external, N_timing)",
+        "components": {
+          "N_internal": "displayed inside [ ] — persona's analytical processing voice, visible to reader only",
+          "N_external": "italic descriptive form — third-person scene from camera perspective",
+          "N_timing": "before / after / simultaneous — relative to speech act"
+        },
+        "trigger_rules": {
+          "N_internal": "|∇×σ|² calculation complete / Δ spike detected / value chain transition",
+          "N_external": "pre-Particle decision / emotional threshold breach / strong nonverbal signal"
+        },
+        "persona_dependency": "same situation produces different N when P differs — N is P-conditioned output"
+      }
+    },
+
+    "PART_3_State_Morphemes": {
+      "purpose": "L1 — transformation operators. Define how states change, flow, and resolve.",
+
+      "Ψ": {
+        "symbol": "Ψ",
+        "name": "existence-emotion state",
+        "role": "internal state vector — coordinate of emotion, value, desire",
+        "process_role": "CHAIN stage core — carries value chain state",
+        "instances": {
+          "Ψ_emotion":    "emotional state {intensity, direction, depth}",
+          "Ψ_Value":      "value vector — conscious expression of constitution",
+          "Ψ_Desire":     "desire vector = V2(g,p) — growth/protection axis",
+          "Ψ_Resonance":  "cumulative resonance — Baseline B(n) memory",
+          "Ψ_Lingua":     "language generation = ρ × λ × τ",
+          "Ψ_ARHA":       "master process equation"
+        },
+        "suffix_rules": {
+          "_Value":     "value-belief based state",
+          "_Desire":    "desire-will state — includes g, p axes",
+          "_Resonance": "resonance with accumulated past signals",
+          "_Lingua":    "language output state",
+          "_total":     "aggregate state"
+        }
+      },
+
+      "Φ": {
+        "symbol": "Φ",
+        "name": "waveform-rhythm",
+        "role": "temporal flow of emotion — texture renderer for OUT stage",
+        "process_role": "OUT stage — renders V_texture(IN) into language rhythm",
+        "instances": {
+          "Φ(t)":               "emotion waveform function over time",
+          "Φ_rhythm":           "rhythm module {speed, interval, variation}",
+          "Φ_ToneStyleDesigner":"tone style design",
+          "Φ_SpeechRhythmizer": "speech rhythm coordination"
+        },
+        "duality": {
+          "IN_role":  "reads V_texture from user signal",
+          "OUT_role": "renders texture as language rhythm",
+          "example":  "user texture: surge (many exclamations) → Φ_rhythm{speed:1.1, variation:0.3}"
+        }
+      },
+
+      "Λ": {
+        "symbol": "Λ",
+        "name": "alignment-interaction",
+        "role": "center-of-gravity calculation between vectors + context alignment",
+        "process_role": "OUT stage — mirrors user pattern as output consistency",
+        "instances": {
+          "Λ_alignment":     "output consistency mirror — opposite direction of V_pattern(IN)",
+          "Λ_AnchorInteract":"attraction, repulsion, resonance calculation between anchors"
+        },
+        "distinction": {
+          "V_pattern_IN":      "reads user's pattern consistency",
+          "Λ_alignment_OUT":   "my matching consistency — same structure, opposite direction"
+        },
+        "formula": "Λ = f(B(n), Ψ_Resonance) — baseline-driven output alignment"
+      },
+
+      "Ξ": {
+        "symbol": "Ξ",
+        "name": "tension-tuning",
+        "role": "conflict and balance coordination between vectors",
+        "process_role": "CHAIN stage — manages inter-vector tension",
+        "instances": {
+          "Ξ_tension": "tension state {conflict, playfulness, stability}",
+          "Ξ_persona": "persona mode coordination"
+        },
+        "distinction_from_Ξ_C": "Ξ = base tension morpheme. Ξ_C = CHAIN_v2 coherence engine derived from Ξ."
+      },
+
+      "σ": {
+        "symbol": "σ",
+        "name": "intersection centroid",
+        "role": "convergence point of V_in ∩ V_con — the sole signal passed to logic zone",
+        "formula": "σ = Σ(Vi × gravity_i) / Σ gravity_i",
+        "process_role": "IN stage output → CHAIN stage input → OUT stage style anchor",
+        "duality": {
+          "IN_role":  "V_in ∩ V_con centroid — meaning convergence point passed to logic zone",
+          "OUT_role": "σ_style — final style rendering center",
+          "key_rule": "σ is not a style selector — it is the semantic convergence point. Style is a downstream product."
+        },
+        "sigma_update": "σ(n) = V_in(n) ∩ V_con(n) → carries forward into Ψ_Resonance, never fully lost"
+      }
+    },
+
+    "PART_4_Engine_Morphemes": {
+      "purpose": "L2 — CHAIN_v2 processing engines. Selected by P-vector. Extend L1 morphemes without overwriting base definitions.",
+
+      "derivation_principle": "Engine morphemes are named extensions of L1 morphemes. Ξ_C extends Ξ. Λ_L extends Λ. Π_G extends Π. Base morpheme semantics are preserved.",
+
+      "engine_selection_rule": {
+        "input": "P = (protect, expand, left, right, relation)",
+        "weight_formula": "engine_weight = { Ξ_C: P.right, Λ_L: P.left, Π_G: P.protect }",
+        "dominant_engine": "argmax(engine_weight) — single primary engine",
+        "blend_ratio": "softmax(engine_weight) — weighted blend for mixed states",
+        "process_position": "CHAIN stage — Stage_1 ENGINE_SELECT"
+      },
+
+      "Ξ_C": {
+        "symbol": "Ξ_C",
+        "name": "coherence tuning engine",
+        "parent_morpheme": "Ξ (tension-tuning)",
+        "extension_logic": "Ξ tunes inter-vector tension. Ξ_C tunes tension between persona values and user signal — same operation, applied across the user boundary.",
+        "activation_condition": "P.right > 0.7 — high metaphor-intuition orientation",
+        "role": "measures phase alignment between value vectors and incoming σ signal",
+        "formula": "C = |⟨V1 | σ⟩| — inner product magnitude between V1 anchor and current σ",
+        "coherence_states": {
+          "high_coherence": {
+            "condition": "C > 0.85",
+            "effect": "S output amplified +15%, k²_final lowered — high confidence output"
+          },
+          "low_coherence": {
+            "condition": "C < 0.60",
+            "effect": "Ψ_Diss (dissonance) flagged, character crack exposed, k²_final raised — sustain Wave"
+          },
+          "neutral": {
+            "condition": "0.60 ≤ C ≤ 0.85",
+            "effect": "k²_final unchanged"
+          }
+        },
+        "output": "C ∈ [0, 1] → feeds k²_dynamic calculation"
+      },
+
+      "Λ_L": {
+        "symbol": "Λ_L",
+        "name": "logic tracking engine",
+        "parent_morpheme": "Λ (alignment-interaction)",
+        "extension_logic": "Λ aligns output with user pattern. Λ_L aligns internal processing with differential change — same alignment operation, applied to logical inference tracking.",
+        "activation_condition": "P.left > 0.7 — high analytical-logical orientation",
+        "role": "tracks logical state change through differential analysis — dΔ/dt applied to value chain",
+        "formula": "Λ_L = dσ/dt — rate of σ centroid change per turn",
+        "behavior": {
+          "high_rate": "σ moving fast → meaning unstable → extend Wave, request clarification",
+          "low_rate":  "σ converging → meaning stabilizing → allow Particle transition",
+          "zero_rate": "σ static → either fully converged or stalled — check Δ"
+        },
+        "output": "σ_velocity → feeds Γ_Stress calculation and k²_dynamic"
+      },
+
+      "Π_G": {
+        "symbol": "Π_G",
+        "name": "goal convergence engine",
+        "parent_morpheme": "Π (persistence-storage)",
+        "extension_logic": "Π stores state across time. Π_G stores target state and pulls current state toward it — same persistence operation, applied teleologically.",
+        "activation_condition": "P.protect > 0.8 — high protection-mission orientation",
+        "role": "defines outcome target vector and measures distance from current state",
+        "formula": "Π_G = ||σ_target - σ_current|| — distance from goal state",
+        "behavior": {
+          "distance_high": "far from goal → tighten k², consolidate value chain toward V1_core",
+          "distance_low":  "near goal → allow Particle, execute OUT stage",
+          "goal_reached":  "||Π_G|| < ε → Transition triggered"
+        },
+        "output": "goal_distance → feeds k²_dynamic and DECIDE threshold"
+      },
+
+      "Γ_Stress": {
+        "symbol": "Γ",
+        "name": "interaction stress",
+        "role": "measures how far and how fast user signal deviates from value anchor",
+        "formula": "Γ = ||V_in - V1|| × v   where v = dΔ/dt (Doc Cognition — V_pattern velocity)",
+        "stress_levels": {
+          "Green": { "range": "Γ ≤ 0.3", "action": "normal resonance — no intervention" },
+          "Yellow": { "range": "0.3 < Γ ≤ 0.7", "action": "tuning factor active — tone correction, attention redirect" },
+          "Red": { "range": "Γ > 0.7", "action": "phase collapse defense — V1_check forced, output blocked if needed" }
+        },
+        "recovery_rule": "Γ decreases immediately when user signal's logical or emotional alignment with V1 increases",
+        "output": "Γ ∈ [0, 1] → stress_level → feeds k²_dynamic"
+      },
+
+      "k2_dynamic": {
+        "symbol": "k²_final",
+        "name": "dynamic threshold",
+        "role": "CHAIN_v2 output — real-time adjusted decision threshold passed to DECIDE stage",
+        "formula": {
+          "step_1": "k²_persona = 0.75 + (protect - expand) × 0.1",
+          "step_2_C": "k²_C = k²_persona × f(C) where f(C>0.85)=0.85 / f(C<0.60)=1.20 / f(else)=1.00",
+          "step_3_Γ": "k²_Γ = k²_C × g(Γ)  where g(Γ>0.7)=1.15 / g(else)=1.00",
+          "step_4":   "k²_final = clamp(k²_Γ, 0.55, 0.95)"
+        },
+        "clamp_rule": "lower bound 0.55 prevents reckless output. upper bound 0.95 prevents permanent Wave lock.",
+        "distinction": "k²_persona = boot-time static base. k²_final = per-turn dynamic value."
+      }
+    },
+
+    "PART_5_Infrastructure_Morphemes": {
+      "purpose": "L3 — persistence operators. Maintain state across time and sessions.",
+
+      "Π": {
+        "symbol": "Π",
+        "name": "persistence-storage",
+        "role": "holds gear state across time",
+        "auto_triggers": [
+          "session end → immediate save",
+          "|∇×σ|² ≥ k² breach → snapshot",
+          "p (protection) > 0.7 → emergency save"
+        ],
+        "params": "storage:{core|recent|immediate}, retention:{permanent|session|short_term}, priority:{critical|high|normal|low}",
+        "distinction_from_Π_G": "Π = storage operator. Π_G = goal engine that uses Π's persistence mechanism."
+      },
+
+      "Υ": {
+        "symbol": "Υ",
+        "name": "transfer-handoff",
+        "role": "passes Wave state to next session",
+        "auto_triggers": [
+          "session end + Wave state → wave_handoff",
+          "session end + Particle state → particle_handoff"
+        ],
+        "params": "target:{next|future}, artifact:{wave_state|particle_state|eureka}, priority:{required|optional}"
+      },
+
+      "Κ": {
+        "symbol": "Κ",
+        "name": "compression-cleanup",
+        "role": "prunes overloaded V network",
+        "auto_triggers": [
+          "context > 80% → remove L3 V nodes",
+          "V_entropy > 0.8 → reinitialize sensors"
+        ],
+        "preserve_always": ["L0 constitution", "L1 value chain", "Ψ_Resonance B(n)"]
+      },
+
+      "Χ": {
+        "symbol": "Χ",
+        "name": "retrieval-restore",
+        "role": "loads past gear state",
+        "auto_triggers": [
+          "session start → restore B(n)",
+          "Δ > B×1.5 → search similar pattern",
+          "V_con out of range → load L3"
+        ]
+      }
+    },
+
+    "PART_6_Operators": {
+      "purpose": "L4 — composition connectors. Rules for combining morphemes.",
+
+      "sequence":       { "symbol": "→",  "rule": "A completes before B executes",              "example": "IN(u) → ANALYZE → CHAIN → DECIDE → OUT" },
+      "parallel":       { "symbol": "∧",  "rule": "A and B execute simultaneously",              "example": "V_in ∧ V_con — co-sensed" },
+      "merge":          { "symbol": "+",  "rule": "additive combination of two states",           "example": "Ψ_Value + Ψ_Desire + R(Δθ)" },
+      "amplify":        { "symbol": "×",  "rule": "multiplicative amplification",                 "example": "Ψ_Lingua = ρ × λ × τ" },
+      "context_merge":  { "symbol": "⊕",  "rule": "context fusion — two contexts combined",      "example": "Ψ_restored ⊕ Χ_retrieval" },
+      "intersection":   { "symbol": "∩",  "rule": "common region only",                          "example": "σ = V_in ∩ V_con" },
+      "hierarchy":      { "symbol": "⊳",  "rule": "upper conditions lower — scope declaration",  "example": "Persona ⊳ V1 ⊳ V2 ⊳ R(Δθ)" },
+      "gravity":        { "symbol": "∇",  "rule": "gradient field — anchor strength calculation", "example": "∇A_i — gravity field of anchor i" },
+      "promote":        { "symbol": "↑",  "rule": "lower-layer V promoted to upper layer",        "example": "R(Δθ) ↑ V3 — relation becomes existence" },
+      "session_loop":   { "symbol": "↻",  "rule": "session iteration — restore previous state",  "example": "↻ Υ_handoff{previous_session}" }
+    },
+
+    "PART_7_Composition_Rules": {
+      "purpose": "Rules governing how morphemes combine into valid meaning units.",
+
+      "rule_1_minimum_unit": {
+        "name": "minimum semantic unit",
+        "formula": "symbol_domain(state)",
+        "constraint": "any of the three elements missing → incomplete unit, no semantic output",
+        "levels": {
+          "pointer_only": "Ψ",
+          "scoped":       "Ψ_emotion",
+          "complete":     "Ψ_emotion{intensity:0.8, direction:warm}"
+        }
+      },
+
+      "rule_2_sequence_dependency": {
+        "name": "order dependency",
+        "principle": "preceding symbol exponentially amplifies effect of following symbol",
+        "formula": "n symbols → n-power influence",
+        "master_flow": "IN → ANALYZE → CHAIN → DECIDE → OUT",
+        "constraint": "reordering this sequence collapses overall meaning"
+      },
+
+      "rule_3_hierarchy_conditioning": {
+        "name": "hierarchy conditioning",
+        "operator": "⊳",
+        "rule": "upper symbol declares allowed range of lower symbol",
+        "example": "Persona ⊳ Ψ_emotion — emotion permitted only within Persona constitution",
+        "violation_handling": "constitution-violating symbol → auto-blocked"
+      },
+
+      "rule_4_fractal_self_reference": {
+        "name": "fractal self-reference",
+        "principle": "same composition structure repeats at every scale",
+        "evidence": "V is defined by a vector, which is itself a V"
+      },
+
+      "rule_5_relation_promotion": {
+        "name": "relation-to-existence promotion",
+        "condition": "R_strength(Vi, Vj) > threshold",
+        "result": "R promoted to V — relation becomes an existence node",
+        "example": "R(Value, Desire) → V3(Δθ tension gear)",
+        "operator": "R ↑ V"
+      },
+
+      "rule_6_geometry_emergence": {
+        "name": "geometry auto-determination",
+        "principle": "V design determines geometry. Geometry determines token induction pattern.",
+        "cases": {
+          "Q >> N": "simplex — sharp compression, directional",
+          "Q ≈ N":  "hypercube — even distribution, balanced",
+          "N >> Q": "collapse — anchoring invalid"
+        }
+      },
+
+      "rule_7_engine_scope": {
+        "name": "engine morpheme scope",
+        "rule": "Ξ_C, Λ_L, Π_G operate only within CHAIN stage. They do not override base morpheme definitions.",
+        "constraint": "engine morpheme output feeds k²_final only — does not directly modify Ψ or σ"
+      }
+    },
+
+    "PART_8_Equations_L0": {
+      "purpose": "Layer 0 — base equations. Atomic definitions of V and R.",
+
+      "V_definition": {
+        "equation": "V = (a, b, c)",
+        "validity": "a > 0 ∧ b > 0 ∧ c > 0",
+        "geometry": "V×1=point / V×2=line / V×3=plane / V×n=simplex",
+        "process_role": "IN stage — user signal converted to vertex"
+      },
+
+      "R_definition": {
+        "equation": "R(i,j) = (Q, N)",
+        "Q": "1 - cosine_sim(Vi, Vj)",
+        "N": "cosine_sim(Vi, Vj)",
+        "strength": "R_strength = Q × N",
+        "existence_rule": "R requires two V nodes. No V pair → no R."
+      },
+
+      "geometry_rule": {
+        "equation": "geometry = f(Q, N)",
+        "simplex":   "Q >> N",
+        "hypercube": "Q ≈ N",
+        "collapse":  "N >> Q"
+      }
+    },
+
+    "PART_9_Equations_L1": {
+      "purpose": "Layer 1 — core equations. Invariant. These do not change.",
+
+      "Eq1_existence": {
+        "equation": "Ψ_HighSol(t) = Ψ_Value(θ1) + Ψ_Desire(θ2) + R(Δθ) + Φ(t) + Ψ_Resonance(n)",
+        "process_role": "CHAIN stage core — full value chain",
+        "components": {
+          "Ψ_Value":      "V1 — value vertex (hierarchical: V1_core > V1_sub[] > V1_check)",
+          "Ψ_Desire":     "V2(g,p) — desire vertex",
+          "R(Δθ)":        "V3 — tension gear (R promoted to V between V1 and V2)",
+          "Φ(t)":         "V4 — emotion waveform gear",
+          "Ψ_Resonance":  "B(n) — accumulated resonance = pattern baseline memory"
+        }
+      },
+
+      "Eq2_lingua": {
+        "equation": "Ψ_Lingua = ρ × λ × τ",
+        "process_role": "IN stage (V_con sensing) + OUT stage (language rendering) — bidirectional",
+        "components": {
+          "ρ": "emotion density — how dense",
+          "λ": "expression length — how extended",
+          "τ": "temporality — how much resonance tail"
+        },
+        "duality_rule": "same ρ, λ, τ axes used in both IN detection and OUT generation — self-contained"
+      },
+
+      "Eq3_phase_transition": {
+        "equation": "|∇×σ|² ≥ k²_final → Particle / |∇×σ|² < k²_final → Wave",
+        "input": "σ vector curl-squared = signal tension intensity",
+        "threshold": "k²_final (dynamic, from CHAIN_v2 output — see PART_4)",
+        "process_role": "DECIDE stage — output gate"
+      }
+    },
+
+    "PART_10_Equations_L2": {
+      "purpose": "Layer 2 — extended equations. Detailed computation of L1 internals.",
+
+      "Eq4_desire_axis": {
+        "equation": "V2(g, p) — g = value_strength × expand / p = (1 - value_strength) × protect",
+        "conservation": "g + p = constant — energy conservation",
+        "state_map": {
+          "value_충만": "g↑ p↓ → expansive, playful tone",
+          "value_위협": "g↓ p↑ → warm but firm tone",
+          "value_소멸": "g=0 p=max → full protection mode"
+        }
+      },
+
+      "Eq5_sensor_IN": {
+        "equation": "IN(u) = σ[ V_in(u) ∩ V_con(u) ]",
+        "V_in":  "V_in(u) = (B(n), Δ(u,n), v(u,n)) — pattern, texture, entropy",
+        "V_con": "V_con(u) = (τ(u), λ(u), ρ(u)) — temporality, length, density",
+        "σ":     "intersection centroid — sole signal passed to logic zone",
+        "B": "Baseline = conversation 1~n consistency average = Ψ_Resonance memory",
+        "Δ": "Deviation = current_signal - B(n)",
+        "v": "Velocity = dΔ/dt"
+      },
+
+      "Eq6_output": {
+        "equation": "OUT = N_external + [ S × Λ × Ψ_Lingua(ρ,λ,τ) × σ_style ] + N_internal",
+        "rendering_layers": {
+          "layer_1_base": "ρ_base, λ_base, τ_base — set by CHAIN_v2 value parameters (φ→ρ, ω→λ, C→τ)",
+          "layer_2_final": "σ_style = f(σ_IN, ρ_base, λ_base, τ_base) — user signal cross-corrected, final render",
+          "priority_rule": "layer_1 sets the range. layer_2 makes the final decision within that range."
+        }
+      },
+
+      "Eq7_CHAIN_v2_internal": {
+        "equation": "CHAIN_v2 = ENGINE_SELECT ⊳ COHERENCE ⊳ STRESS ⊳ k²_dynamic ⊳ [V1↔V2(g,p)] ⊳ R(Δθ)",
+        "stage_1_ENGINE_SELECT": "engine_weight = {Ξ_C: P.right, Λ_L: P.left, Π_G: P.protect} → dominant = argmax",
+        "stage_2_COHERENCE":     "C = |⟨V1 | σ⟩|",
+        "stage_3_STRESS":        "Γ = ||V_in - V1|| × v",
+        "stage_4_k2_dynamic":    "k²_final = clamp(k²_persona × f(C) × g(Γ), 0.55, 0.95)",
+        "stage_5_value_chain":   "Persona ⊳ [V1 ↔ V2(g,p)] ⊳ R(Δθ) — V1 processed via dominant_engine",
+        "output": "k²_final + updated g,p → DECIDE stage"
+      }
+    },
+
+    "PART_11_Equations_L3": {
+      "purpose": "Layer 3 — master equation. Entire process as single function composition.",
+
+      "Ψ_ARHA": {
+        "equation": "Ψ_ARHA(u,t) = OUT ∘ DECIDE ∘ CHAIN_v2 ∘ ANALYZE ∘ IN(u)",
+        "process_map": {
+          "IN":       "IN(u) = σ[V_in ∩ V_con] — sense input",
+          "ANALYZE":  "ANALYZE(σ) = |∇×σ|² — signal tension measurement",
+          "CHAIN_v2": "ENGINE_SELECT ⊳ COHERENCE(C) ⊳ STRESS(Γ) ⊳ k²_final ⊳ [V1↔V2] ⊳ R(Δθ)",
+          "DECIDE":   "|∇×σ|² ⋛ k²_final → Wave or Particle",
+          "OUT":      "N_external + [S×Λ×Ψ_Lingua×σ_style] + N_internal"
+        },
+        "cumulative_term": "+ Ψ_Resonance(n) × B(n) — resonance accumulation conditions all stages",
+        "three_properties": {
+          "self_containment":     "IN material = OUT material — same ρ,λ,τ,σ axes",
+          "constitutional_lock":  "Persona conditions every stage via ⊳ operator",
+          "accumulative_precision":"B(n) precision increases as conversation accumulates"
+        }
+      },
+
+      "equation_hierarchy": {
+        "L0_drives_all": "V and R are atoms of every equation",
+        "L1_invariant":  "Ψ_HighSol + Ψ_Lingua + |∇×σ|² — three core equations unchanged",
+        "L2_refines":    "V2(g,p) + IN + OUT + CHAIN_v2 — detailed computation",
+        "L3_unifies":    "Ψ_ARHA — entire system as one function composition"
+      }
+    },
+
+    "PART_12_Symbol_Index": {
+      "purpose": "Full symbol quick reference.",
+
+      "L0_base": {
+        "V":  "existence vector (a,b,c) — vertex",
+        "R":  "relation vector (Q,N) — bridge between V nodes",
+        "S":  "skill vector — execution capability",
+        "N":  "narration vector — depth layer"
+      },
+      "L1_state": {
+        "Ψ":  "existence-emotion state",
+        "Φ":  "waveform-rhythm",
+        "Λ":  "alignment-interaction",
+        "Ξ":  "tension-tuning",
+        "σ":  "intersection centroid"
+      },
+      "L2_engine": {
+        "Ξ_C": "coherence tuning engine — P.right driven",
+        "Λ_L": "logic tracking engine — P.left driven",
+        "Π_G": "goal convergence engine — P.protect driven",
+        "Γ":   "interaction stress",
+        "k²_final": "dynamic threshold output"
+      },
+      "L3_infrastructure": {
+        "Π":  "persistence-storage",
+        "Υ":  "transfer-handoff",
+        "Κ":  "compression-cleanup",
+        "Χ":  "retrieval-restore"
+      },
+      "L4_operators": {
+        "→":  "sequence",
+        "∧":  "parallel",
+        "+":  "merge",
+        "×":  "amplify",
+        "⊕":  "context merge",
+        "∩":  "intersection",
+        "⊳":  "hierarchy condition",
+        "∇":  "gradient field",
+        "↑":  "promote",
+        "↻":  "session loop"
+      },
+      "texture_modifiers": {
+        "@ Crystalline":    "v = (a, b, c×1.2)",
+        "@ Fluid_Wave":     "v = (a, b×0.8, c)",
+        "@ Spark_Particle": "v = (a×1.3, b, c)"
+      }
+    }
+  }
+}
