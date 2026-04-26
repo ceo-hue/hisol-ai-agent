@@ -17,6 +17,7 @@
 import { ARHARuntime } from '../runtime.js';
 import { runKappaPipeline, formatKappaSummary } from '../core/observation/code-validate.js';
 import { runDerivationPipeline } from '../core/identity/derivation.js';
+import { StackExecutor } from '../core/orchestration/executor.js';
 import type { PersonaVector } from '../core/identity/persona.js';
 
 // ─────────────────────────────────────────
@@ -380,6 +381,92 @@ export const ARHA_TOOLS = [
           linguaStyle: `ρ=${derived.lingua.rho.toFixed(2)} λ=${derived.lingua.lam.toFixed(2)} τ=${derived.lingua.tau.toFixed(2)}`,
         },
       };
+    },
+  },
+
+  // ── 8. arha_stack_run (NEW — Vol.G 스택 실행기) ─────────────────────────────
+  {
+    name: 'arha_stack_run',
+    description:
+      'Vol.G 스택 실행 — 다중 페르소나 레이어 파이프라인을 순서대로 실행. ' +
+      '각 레이어가 Vol.F MetaSkill(PERCEPTION→SYNTHESIS)을 완주하고 HandoffPackage를 다음 레이어로 전달. ' +
+      '최종 composedPrompt를 Claude API system prompt로 직접 사용 가능.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        stackId: {
+          type: 'string',
+          description:
+            '실행할 스택 ID. ' +
+            'STACK_VISUAL_DESIGN_3 (Jobs→Tschichold→Gaudi) | ' +
+            'STACK_CONCEPT_DESIGN_2 (Jobs→Tschichold) | ' +
+            'STACK_SPACE_EXPERIENCE_3 (Jobs→Gaudi)',
+        },
+        input: {
+          type: 'string',
+          description: '스택 전체에 전달할 사용자 요청 (첫 레이어 입력)',
+        },
+        maxTurnsPerLayer: {
+          type: 'number',
+          description: '레이어당 최대 턴 수 (기본 3, 권장 2~4)',
+          default: 3,
+        },
+        listOnly: {
+          type: 'boolean',
+          description: '사용 가능한 스택 목록만 반환 (실행 없음)',
+          default: false,
+        },
+      },
+    },
+    handler: async (args: {
+      stackId?: string;
+      input?: string;
+      maxTurnsPerLayer?: number;
+      listOnly?: boolean;
+    }) => {
+      // List mode — no execution
+      if (args.listOnly) {
+        return { stacks: StackExecutor.listStacks() };
+      }
+
+      if (!args.stackId) return { error: 'stackId is required. Use listOnly:true to see available stacks.' };
+      if (!args.input)   return { error: 'input is required.' };
+
+      try {
+        const result = await StackExecutor.run(
+          args.stackId,
+          args.input,
+          { maxTurnsPerLayer: args.maxTurnsPerLayer ?? 3 },
+        );
+
+        return {
+          stackId:        result.stackId,
+          stackDesc:      result.stackDesc,
+          status:         result.status,
+          totalTurns:     result.totalTurns,
+          // Per-layer summary
+          layers: result.layers.map(lr => ({
+            personaId:    lr.personaId,
+            layerType:    lr.layerType,
+            artifactType: lr.artifactType,
+            turns:        lr.turns,
+            finalPhase:   lr.finalPhase,
+            finalC:       lr.finalC,
+            qualityGrade: lr.qualityGrade,
+            volFStatus:   lr.volFStatus,
+            // Artifact schema (Claude fills in actual content)
+            artifactSchema: lr.artifact.schema,
+            constraints:    lr.artifact.constraints,
+          })),
+          // HandoffPackage summary
+          immutableSpec:  result.handoffPackage.immutable_spec,
+          // Full composed system prompt — use directly as Claude system prompt
+          composedPrompt: result.composedPrompt,
+        };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { error: msg };
+      }
     },
   },
 

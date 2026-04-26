@@ -32,7 +32,9 @@ import {
 } from './core/observation/analytics.js';
 import {
   initMetaSkillState,
+  advanceMetaSkillLayer,
   formatVolFStatus,
+  LAYER_ORDER,
   type MetaSkillPipelineState,
 } from './core/skill/metaskill.js';
 import { formatVolGLayer } from './core/orchestration/stack.js';
@@ -199,6 +201,44 @@ export class ARHARuntime {
     }
 
     const qualityGrade = computeQualityGrade(this.state.C);
+
+    // ─── Vol.F MetaSkill auto-advancement ───
+    // Phase maps to MetaSkill layer progression:
+    //   Wave       → PERCEPTION (turn 1) → JUDGMENT (turn 2+)
+    //   Transition → ALIGNMENT
+    //   Particle   → SYNTHESIS → complete
+    if (this.volFState && this.volFState.status !== 'inactive') {
+      // First turn: activate
+      if (this.volFState.status === 'ready') {
+        this.volFState = { ...this.volFState, status: 'active' };
+      }
+
+      if (this.volFState.status === 'active' && this.volFState.currentLayer !== null) {
+        const currentIdx = LAYER_ORDER.indexOf(this.volFState.currentLayer);
+        const phaseNow   = this.state.phase;
+
+        if (phaseNow === 'Particle') {
+          // Jump to SYNTHESIS (skip if already there) then complete
+          while (
+            this.volFState.status === 'active' &&
+            this.volFState.currentLayer !== null &&
+            LAYER_ORDER.indexOf(this.volFState.currentLayer) < 3   // 3 = SYNTHESIS
+          ) {
+            this.volFState = advanceMetaSkillLayer(this.volFState);
+          }
+          // One more advance completes SYNTHESIS
+          if (this.volFState.currentLayer === 'SYNTHESIS') {
+            this.volFState = advanceMetaSkillLayer(this.volFState);
+          }
+        } else if (phaseNow === 'Transition' && currentIdx < 2) {
+          // Transition → ALIGNMENT layer
+          this.volFState = advanceMetaSkillLayer(this.volFState);
+        } else if (phaseNow === 'Wave' && currentIdx < 2) {
+          // Wave: advance PERCEPTION→JUDGMENT (one per turn, stop before ALIGNMENT)
+          this.volFState = advanceMetaSkillLayer(this.volFState);
+        }
+      }
+    }
 
     // Append state snapshot (Υ observation feed)
     this.snapshots.push({
