@@ -30,6 +30,12 @@ import {
   type StateSnapshot,
   type ARHAObservation,
 } from './core/observation/analytics.js';
+import {
+  initMetaSkillState,
+  formatVolFStatus,
+  type MetaSkillPipelineState,
+} from './core/skill/metaskill.js';
+import { formatVolGLayer } from './core/orchestration/stack.js';
 
 export interface ARHAProcessInput {
   text: string;
@@ -59,6 +65,9 @@ export interface ARHAProcessOutput {
     g: number;
     p: number;
   };
+  // Vol.F/G metadata
+  volF: MetaSkillPipelineState | null;
+  volGLayer: string | null;
 }
 
 /** Context injected into LLM system prompt each turn */
@@ -99,6 +108,7 @@ export class ARHARuntime {
   private history: ConversationMessage[] = [];
   private snapshots: StateSnapshot[] = [];
   private activeSessionId: string | null = null;
+  private volFState: MetaSkillPipelineState | null = null;
 
   constructor(personaId = 'HighSol', sessionId?: string) {
     this.personaId = personaId;
@@ -117,6 +127,9 @@ export class ARHARuntime {
     this.skillTree = new SkillWorkTree();
     this.skillTree.registerDomainSkills(skills);
     this.ready = true;
+
+    // Vol.F — init MetaSkill pipeline state if applicable
+    this.volFState = initMetaSkillState(persona, skills);
 
     // Π persistence — restore resonance + history + snapshots from previous session
     if (sessionId) {
@@ -220,6 +233,8 @@ export class ARHARuntime {
         g:            this.state.g,
         p:            this.state.p,
       },
+      volF:      this.volFState,
+      volGLayer: persona.volGLayerType ?? null,
     };
   }
 
@@ -300,16 +315,29 @@ export class ARHARuntime {
     const D   = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
     const checkActive = (s.C ?? 0) > persona.valueChain.check.thetaTrigger;
 
+    // Vol.F/G lines — only included if applicable
+    const volFLine = this.volFState && this.volFState.status !== 'inactive'
+      ? formatVolFStatus(this.volFState)
+      : null;
+    const volGLine = persona.volGLayerType
+      ? formatVolGLayer(persona.id, persona.volGLayerType)
+      : null;
+    const weightLine = persona.weightStructure
+      ? `w_core=${persona.weightStructure.wCore} w_subs=[${persona.weightStructure.wSubs.join(', ')}]`
+      : null;
+
     return [
       D,
       '[Vol.A — IDENTITY]',
       `당신은 ${persona.identity}`,
       `헌법 규칙: ${persona.constitutionalRule}`,
       `P_vector: protect=${persona.P.protect} expand=${persona.P.expand} left=${persona.P.left} right=${persona.P.right} relation=${persona.P.relation}`,
+      persona.dominantEngineNote ? `Engine: ${persona.dominantEngineNote}` : null,
       '',
       '[Vol.B — VALUE CHAIN STATE]',
       `V1_core: ${persona.valueChain.core.declaration}`,
       `  φ=${persona.valueChain.core.phi} ω=${persona.valueChain.core.omega} κ=${persona.valueChain.core.kappa} | texture=${persona.valueChain.core.texture}`,
+      weightLine ? `  ${weightLine}` : null,
       `V1_check: ${persona.valueChain.check.declaration}`,
       `  θ_trigger=${persona.valueChain.check.thetaTrigger} → ${checkActive ? '⚠ ACTIVATED' : '○ dormant'}`,
       '',
@@ -332,6 +360,9 @@ export class ARHARuntime {
       `Tone: ${ctx.tone}`,
       `lingua: ρ=${ctx.linguaParams.rho.toFixed(2)} λ=${ctx.linguaParams.lam.toFixed(2)} τ=${ctx.linguaParams.tau.toFixed(2)}`,
       ctx.waveInstruction ?? '',
+      '',
+      volFLine ? `[Vol.F — METASKILL] ${volFLine}` : null,
+      volGLine ? `[Vol.G — STACK]     ${volGLine}` : null,
       D,
     ].filter(l => l !== undefined && l !== null).join('\n');
   }

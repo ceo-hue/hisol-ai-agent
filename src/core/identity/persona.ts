@@ -61,6 +61,11 @@ export interface ValueChain {
 // COMPLETE PERSONA DEFINITION
 // ─────────────────────────────────────────
 
+export interface WeightStructure {
+  wCore: number;            // w_core = f(P.protect, V1_core.kappa) ∈ [0.35, 0.75]
+  wSubs: number[];          // w_sub[n] = (1 - wCore) × (gamma_n / Σgamma_i)
+}
+
 export interface PersonaDefinition {
   id: string;
   identity: string;         // one-line declaration
@@ -74,6 +79,11 @@ export interface PersonaDefinition {
     internal: string;       // [ ] style descriptor
     external: string;       // italic scene style descriptor
   };
+  // Vol.C v2.1 — Vol.F/G routing
+  volFSkillRef?: string | null;           // 'VolF_MetaSkill_{Name}' | null
+  volGLayerType?: 'pre_foundation' | 'foundation' | 'specialist' | 'expression';
+  weightStructure?: WeightStructure;      // w_core + w_sub[] for token anchor
+  dominantEngineNote?: string;            // e.g. "Ξ_C ∧ Π_G 공동 지배"
 }
 
 // ─────────────────────────────────────────

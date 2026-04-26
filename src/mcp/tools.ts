@@ -75,7 +75,16 @@ export const ARHA_TOOLS = [
         },
         // Vol.E wave instruction (if active)
         waveInstruction: result.promptContext.waveInstruction ?? null,
-        // System prompt (structured Vol.A~E format)
+        // Vol.F/G routing metadata
+        volF:      result.volF ? {
+          ref:             result.volF.ref,
+          status:          result.volF.status,
+          currentLayer:    result.volF.currentLayer,
+          completedLayers: result.volF.completedLayers,
+          outputArtifact:  result.volF.outputArtifact,
+        } : null,
+        volGLayer: result.volGLayer,
+        // System prompt (structured Vol.A~F~G format)
         systemPrompt: runtime.buildStructuredSystemPrompt(result),
         sessionId:    sid,
       };
@@ -149,11 +158,50 @@ export const ARHA_TOOLS = [
   // ── 4. arha_persona_list ────────────────────────────────────────────────────
   {
     name: 'arha_persona_list',
-    description: '등록된 페르소나 목록 조회',
-    inputSchema: { type: 'object', properties: {} },
-    handler: async () => {
-      const { listPersonas } = await import('../personas/registry.js');
-      return { personas: listPersonas() };
+    description: '등록된 페르소나 목록 조회 (Vol.F/G 메타데이터 포함)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        detail: {
+          type: 'boolean',
+          description: '상세 정보 포함 여부 (기본: false)',
+          default: false,
+        },
+      },
+    },
+    handler: async (args: { detail?: boolean }) => {
+      const { listPersonas, getPersona } = await import('../personas/registry.js');
+      const ids = listPersonas();
+
+      if (!args.detail) {
+        return { personas: ids };
+      }
+
+      const detailed = ids.map(id => {
+        const entry = getPersona(id);
+        if (!entry) return { id };
+        const { persona } = entry;
+        return {
+          id:               persona.id,
+          identity:         persona.identity,
+          volGLayerType:    persona.volGLayerType ?? null,
+          volFSkillRef:     persona.volFSkillRef ?? null,
+          dominantEngine:   persona.dominantEngineNote ?? null,
+          k2Persona:        persona.k2Persona,
+          wCore:            persona.weightStructure?.wCore ?? null,
+          P: {
+            protect:  persona.P.protect,
+            expand:   persona.P.expand,
+            left:     persona.P.left,
+            right:    persona.P.right,
+            relation: persona.P.relation,
+          },
+          lingua: persona.lingua,
+          skillCount: entry.skills.length,
+        };
+      });
+
+      return { personas: detailed };
     },
   },
 
