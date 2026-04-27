@@ -407,7 +407,9 @@ export const ARHA_TOOLS = [
             '실행할 스택 ID. ' +
             'STACK_VISUAL_DESIGN_3 (Jobs→Tschichold→Gaudi) | ' +
             'STACK_CONCEPT_DESIGN_2 (Jobs→Tschichold) | ' +
-            'STACK_SPACE_EXPERIENCE_3 (Jobs→Gaudi)',
+            'STACK_SPACE_EXPERIENCE_3 (Jobs→Gaudi) | ' +
+            'STACK_BRAND_COPY_2 (Jobs→Ogilvy) | ' +
+            'STACK_PRODUCT_DESIGN_2 (Jobs→Rams)',
         },
         input: {
           type: 'string',
@@ -582,21 +584,32 @@ export const ARHA_TOOLS = [
   },
 
 
-  // ── 10. arha_route (Vol.R — Auto Router) ────────────────────────────────────
+  // ── 10. arha_route (Vol.R — Auto Router, B방향 Anchor Architecture) ─────────
   {
     name: 'arha_route',
     description:
-      'Vol.R automatic persona router — analyzes the request and selects/assembles the best-fit persona stack. ' +
-      'No need to specify personaId or stackId manually. ' +
-      'Extracts 4-axis intent (조직·역할·핵심역량·캐릭터성격) and scores all registered personas. ' +
+      'Vol.R automatic persona router — B방향 anchor architecture. ' +
+      'Analyzes the request and assembles the best-fit persona stack around a team leader (anchor). ' +
+      'anchor: specify a canLead persona (e.g. "Jobs") to fix the team leader; omit for auto-selection. ' +
+      'Router scores only specialist candidates around the anchor — not the anchor itself. ' +
+      'Extracts 4-axis intent (조직·역할·핵심역량·캐릭터성격) for specialist matching. ' +
       'previewOnly:true returns routing reasoning without executing. ' +
-      'Runs the matched stack and returns composedPrompt for Claude API injection.',
+      'On execution, runs the matched stack and returns composedPrompt for Claude API injection. ' +
+      'Available anchors: Jobs (strategist/vision) — more canLead personas can be added.',
     inputSchema: {
       type: 'object',
       properties: {
         input: {
           type: 'string',
           description: '사용자 요청 — 한국어·영어 혼용 가능. 라우터가 자동으로 최적 스택 선택',
+        },
+        anchor: {
+          type: 'string',
+          description:
+            '팀 리더 페르소나 ID (선택). ' +
+            '지정 시 해당 페르소나가 스택의 첫 레이어(pre_foundation)로 고정됨. ' +
+            '미지정 시 canLead=true 페르소나 중 intent 최고 득점자가 자동 선택됨. ' +
+            '현재 canLead 페르소나: Jobs',
         },
         maxTurnsPerLayer: {
           type: 'number',
@@ -612,30 +625,32 @@ export const ARHA_TOOLS = [
       required: ['input'],
     },
     handler: async (args: {
-      input:            string;
+      input:             string;
+      anchor?:           string;
       maxTurnsPerLayer?: number;
-      previewOnly?:     boolean;
+      previewOnly?:      boolean;
     }) => {
       // Preview mode — routing analysis only
       if (args.previewOnly) {
-        const preview = previewRoute(args.input);
+        const preview = previewRoute(args.input, args.anchor);
         return {
           mode:          'preview',
+          anchor:        preview.anchorId,
           intent:        preview.intent,
           source:        preview.source,
           reasoning:     preview.reasoning,
           stackPreview:  preview.stackPreview,
           topScores:     preview.scores.slice(0, 5).map(s => ({
-            personaId:        s.personaId,
-            totalScore:       s.totalScore,
-            competencyScore:  s.breakdown.competencyScore,
+            personaId:         s.personaId,
+            totalScore:        s.totalScore,
+            competencyScore:   s.breakdown.competencyScore,
             organizationScore: s.breakdown.organizationScore,
           })),
         };
       }
 
       // Execution mode — route + run
-      const routeResult = route(args.input);
+      const routeResult = route(args.input, args.anchor);
 
       try {
         // predefined stack → StackExecutor.run(), dynamic stack → StackExecutor.runDef()
@@ -655,6 +670,7 @@ export const ARHA_TOOLS = [
           mode:    'execute',
           routing: {
             source:    routeResult.source,
+            anchor:    routeResult.anchorId,
             reasoning: routeResult.reasoning,
             stackId:   routeResult.stackDef.stackId,
             layers:    routeResult.stackDef.layers.map(l => l.personaId),
@@ -677,6 +693,7 @@ export const ARHA_TOOLS = [
           mode:    'execute_failed',
           routing: {
             source:    routeResult.source,
+            anchor:    routeResult.anchorId,
             reasoning: routeResult.reasoning,
             stackId:   routeResult.stackDef.stackId,
           },
