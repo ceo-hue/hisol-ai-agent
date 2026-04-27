@@ -39,6 +39,7 @@ import {
 } from './core/skill/metaskill.js';
 import { formatVolGLayer } from './core/orchestration/stack.js';
 import { isCompanionMode } from './core/companion/pipeline.js';
+import { ARHA_PROMPT_PREAMBLE } from './core/identity/why.js';
 
 export interface ARHAProcessInput {
   text: string;
@@ -397,6 +398,8 @@ export class ARHARuntime {
       : null;
 
     return [
+      D,
+      ARHA_PROMPT_PREAMBLE,
       D,
       `[Vol.A — IDENTITY]  mode=${mode}`,
       `You are ${persona.identity}`,

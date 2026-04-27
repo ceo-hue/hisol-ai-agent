@@ -20,6 +20,7 @@ import { runDerivationPipeline } from '../core/identity/derivation.js';
 import { StackExecutor } from '../core/orchestration/executor.js';
 import { generateCharacterPersona, listArchetypes } from '../core/companion/generator.js';
 import { registerPersona } from '../personas/registry.js';
+import { formatAboutResponse } from '../core/identity/why.js';
 import type { PersonaVector } from '../core/identity/persona.js';
 
 // ─────────────────────────────────────────
@@ -576,6 +577,24 @@ export const ARHA_TOOLS = [
         const msg = err instanceof Error ? err.message : String(err);
         return { error: msg };
       }
+    },
+  },
+
+
+  // ── 10. arha_about (Vol.0 — Identity & Usage Guide) ────────────────────────
+  {
+    name: 'arha_about',
+    description:
+      'ARHA identity declaration + full usage guide. ' +
+      'No parameters required. Returns: who ARHA is, why it exists, all 10 tools with examples, ' +
+      '4 quick-start recipes, and a glossary of 13 key ARHA terms. ' +
+      'Call this first if you are unfamiliar with ARHA.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+    handler: async (_args: Record<string, never>) => {
+      return formatAboutResponse();
     },
   },
 
