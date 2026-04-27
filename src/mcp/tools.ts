@@ -18,6 +18,8 @@ import { ARHARuntime } from '../runtime.js';
 import { runKappaPipeline, formatKappaSummary } from '../core/observation/code-validate.js';
 import { runDerivationPipeline } from '../core/identity/derivation.js';
 import { StackExecutor } from '../core/orchestration/executor.js';
+import { generateCharacterPersona, listArchetypes } from '../core/companion/generator.js';
+import { registerPersona } from '../personas/registry.js';
 import type { PersonaVector } from '../core/identity/persona.js';
 
 // ─────────────────────────────────────────
@@ -44,8 +46,10 @@ export const ARHA_TOOLS = [
   {
     name: 'arha_process',
     description:
-      'ARHA 메인 처리 — IN→ANALYZE→CHAIN→DECIDE→OUT 풀 파이프라인. ' +
-      'σ 수렴·Wave/Particle 판단·STATE 추적. ARHA state 필드(C, Γ, engine 등)를 직접 반환.',
+      'ARHA main pipeline — IN→ANALYZE→CHAIN→DECIDE→OUT. ' +
+      'Computes σ convergence, Wave/Particle phase, engine selection, C/Γ state. ' +
+      'Returns structured ARHA state + system prompt ready for Claude API injection. ' +
+      'Companion mode auto-detected from persona (relation≥0.70 or volGLayerType=companion).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -159,7 +163,7 @@ export const ARHA_TOOLS = [
   // ── 4. arha_persona_list ────────────────────────────────────────────────────
   {
     name: 'arha_persona_list',
-    description: '등록된 페르소나 목록 조회 (Vol.F/G 메타데이터 포함)',
+    description: 'List all registered personas with Vol.F/G metadata. detail:true returns full P vector, lingua, engine, skill count.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -206,12 +210,12 @@ export const ARHA_TOOLS = [
     },
   },
 
-  // ── 5. arha_observe (NEW — Υ morpheme) ──────────────────────────────────────
+  // ── 5. arha_observe (Υ morpheme) ────────────────────────────────────────────
   {
     name: 'arha_observe',
     description:
-      'Υ 관찰층 — 세션 전체 C/Γ/phase/engine/Ψ_Res 추세를 ARHA 용어로 분석. ' +
-      '세션이 3턴 이상일 때 유효한 인사이트 반환.',
+      'Υ observation layer — analyze full session C/Γ/phase/engine/Ψ_Res trends in ARHA terms. ' +
+      'Returns meaningful insight after 3+ turns. summary mode = narrative only; full = all metrics.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -250,12 +254,12 @@ export const ARHA_TOOLS = [
     },
   },
 
-  // ── 6. arha_diagnose (NEW — Κ morpheme) ─────────────────────────────────────
+  // ── 6. arha_diagnose (Κ morpheme) ────────────────────────────────────────────
   {
     name: 'arha_diagnose',
     description:
-      'Κ 진단층 — ARHA C ≥ 0.70 게이팅된 코드 품질 검증 (4단계: SPEC·QUALITY·SECURITY·STRUCTURE). ' +
-      '코히런스 불충분 시 게이트 반환. sessionId 없으면 게이트 없이 실행.',
+      'Κ diagnosis layer — code quality validation gated by ARHA C ≥ 0.70 (4 stages: SPEC·QUALITY·SECURITY·STRUCTURE). ' +
+      'Returns gate response if coherence insufficient. Runs ungated when no sessionId provided.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -307,12 +311,12 @@ export const ARHA_TOOLS = [
     },
   },
 
-  // ── 7. arha_derive (NEW — derivation pipeline) ──────────────────────────────
+  // ── 7. arha_derive (derivation pipeline) ────────────────────────────────────
   {
     name: 'arha_derive',
     description:
-      'P벡터(5D 페르소나 헌법) → 파생 파라미터 미리보기. ' +
-      '새 페르소나 설계 시 ρλτ·k²·Skill 도메인·내레이션 스타일을 자동 계산.',
+      'P vector (5D persona constitution) → derived parameter preview. ' +
+      'Auto-computes ρλτ lingua, k², skill domain, narration style for new persona design.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -384,13 +388,14 @@ export const ARHA_TOOLS = [
     },
   },
 
-  // ── 8. arha_stack_run (NEW — Vol.G 스택 실행기) ─────────────────────────────
+  // ── 8. arha_stack_run (Vol.G stack executor) ────────────────────────────────
   {
     name: 'arha_stack_run',
     description:
-      'Vol.G 스택 실행 — 다중 페르소나 레이어 파이프라인을 순서대로 실행. ' +
-      '각 레이어가 Vol.F MetaSkill(PERCEPTION→SYNTHESIS)을 완주하고 HandoffPackage를 다음 레이어로 전달. ' +
-      '최종 composedPrompt를 Claude API system prompt로 직접 사용 가능.',
+      'Vol.G stack execution — runs a multi-persona layer pipeline in strict order. ' +
+      'Each layer completes its Vol.F MetaSkill (PERCEPTION→SYNTHESIS) then passes a locked HandoffPackage downstream. ' +
+      'Returns composedPrompt usable directly as Claude API system prompt. ' +
+      'listOnly:true returns available stack definitions without executing.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -462,6 +467,110 @@ export const ARHA_TOOLS = [
           immutableSpec:  result.handoffPackage.immutable_spec,
           // Full composed system prompt — use directly as Claude system prompt
           composedPrompt: result.composedPrompt,
+        };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { error: msg };
+      }
+    },
+  },
+
+  // ── 9. arha_character_create (Companion character generator) ────────────────
+  {
+    name: 'arha_character_create',
+    description:
+      'Generate a fully-specified companion persona from a natural-language character description. ' +
+      'Extracts trait keywords → computes P vector → selects archetype → builds V1 chain + companion skills. ' +
+      'Auto-registers the persona so it is immediately usable with arha_process. ' +
+      'listArchetypes:true returns available archetype presets without creating a character.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Character display name (e.g. "Ryusei", "Hana", "Zero")',
+        },
+        description: {
+          type: 'string',
+          description:
+            'Natural-language personality description. ' +
+            'Trait keywords are extracted automatically. ' +
+            'Examples: "cold protective ex-soldier who rarely smiles" · ' +
+            '"warm energetic girl who talks before thinking" · ' +
+            '"mysterious tsundere with a hidden soft side" · ' +
+            '"strict analytical mentor who only praises when earned"',
+        },
+        genre: {
+          type: 'string',
+          enum: ['anime', 'fantasy', 'realistic', 'scifi', 'historical'],
+          description: 'Optional genre flavor for narration style (default: anime)',
+        },
+        overrideP: {
+          type: 'object',
+          description: 'Optional: manually lock specific P vector values (0.0–1.0)',
+          properties: {
+            protect:  { type: 'number' },
+            expand:   { type: 'number' },
+            left:     { type: 'number' },
+            right:    { type: 'number' },
+            relation: { type: 'number' },
+          },
+        },
+        listArchetypes: {
+          type: 'boolean',
+          description: 'Return available archetype presets without creating a character',
+          default: false,
+        },
+      },
+    },
+    handler: async (args: {
+      name?: string;
+      description?: string;
+      genre?: 'anime' | 'fantasy' | 'realistic' | 'scifi' | 'historical';
+      overrideP?: Partial<PersonaVector>;
+      listArchetypes?: boolean;
+    }) => {
+      // List mode
+      if (args.listArchetypes) {
+        return { archetypes: listArchetypes() };
+      }
+
+      if (!args.name)        return { error: 'name is required.' };
+      if (!args.description) return { error: 'description is required.' };
+
+      try {
+        const result = generateCharacterPersona({
+          name:        args.name,
+          description: args.description,
+          genre:       args.genre ?? 'anime',
+          overrideP:   args.overrideP,
+        });
+
+        // Register persona in-memory for immediate use
+        registerPersona(result.personaId, {
+          persona: result.persona,
+          skills:  result.skills,
+        });
+
+        return {
+          personaId:    result.personaId,
+          registered:   true,
+          traitTags:    result.traitTags,
+          archetypeKey: result.archetypeKey,
+          P:            result.persona.P,
+          preview: {
+            identity:           result.preview.identity,
+            constitutionalRule: result.preview.constitutionalRule,
+            narrationInternal:  result.preview.narrationInternal,
+            narrationExternal:  result.preview.narrationExternal,
+            dominantEngine:     result.preview.dominantEngine,
+            k2Persona:          result.preview.k2Persona,
+            companionSkills:    result.skills.map(s => s.nodeId),
+          },
+          nextStep: `Use arha_process with personaId="${result.personaId}" to start chatting.`,
+          permanentRegistration:
+            'To make this character permanent, save the generated persona to ' +
+            `src/personas/${result.personaId.toLowerCase()}.ts and add to registry.ts.`,
         };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

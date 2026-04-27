@@ -161,20 +161,24 @@ function buildLayerInput(
  */
 const FOLLOWUP_DIRECTIVES: Record<VolGLayerType, string[]> = {
   pre_foundation: [
-    '핵심 후보를 하나로 수렴해주세요. kill_list를 확정하세요.',
-    'Meaning_Spec을 최종 선언해주세요. the_answer를 단 한 문장으로.',
+    'Converge core candidates to one. Finalize kill_list.',
+    'Declare final Meaning_Spec. State the_answer in a single sentence.',
   ],
   foundation: [
-    '비례 수치를 구체적으로 확정해주세요. 황금비/루트 수열 중 선택 선언.',
-    'Grid_Spec 최종 확정 — grid_columns·gutter·margin·type_scale 수치 선언.',
+    'Specify proportion values concretely. Declare golden ratio or root sequence choice.',
+    'Final Grid_Spec — declare grid_columns, gutter, margin, type_scale numerically.',
   ],
   specialist: [
-    '자연 구조 원리를 적용해주세요. 현수선 또는 쌍곡면 중 선택 이유 설명.',
-    'Domain_Spec 최종 통합 — 구조·감각·신성 방향 전체 확정.',
+    'Apply natural structural principle. Explain choice of catenary or hyperbolic surface.',
+    'Final Domain_Spec — integrate structure, sensory, and directional elements.',
   ],
   expression: [
-    '표면 언어를 구체화해주세요.',
-    'Surface_Spec 최종 확정.',
+    'Concretize surface language.',
+    'Final Surface_Spec — declare all visual language elements.',
+  ],
+  companion: [
+    'What does the character feel right now? Let it show through action.',
+    'Confirm connection state — what is remembered, what changes.',
   ],
 };
 

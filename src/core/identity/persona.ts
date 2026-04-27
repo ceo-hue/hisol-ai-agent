@@ -81,7 +81,7 @@ export interface PersonaDefinition {
   };
   // Vol.C v2.1 — Vol.F/G routing
   volFSkillRef?: string | null;           // 'VolF_MetaSkill_{Name}' | null
-  volGLayerType?: 'pre_foundation' | 'foundation' | 'specialist' | 'expression';
+  volGLayerType?: 'pre_foundation' | 'foundation' | 'specialist' | 'expression' | 'companion';
   weightStructure?: WeightStructure;      // w_core + w_sub[] for token anchor
   dominantEngineNote?: string;            // e.g. "Ξ_C ∧ Π_G 공동 지배"
 }

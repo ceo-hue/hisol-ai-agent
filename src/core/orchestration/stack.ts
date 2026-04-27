@@ -23,7 +23,8 @@ export type VolGLayerType =
   | 'pre_foundation'  // LAYER 0: meaning/purpose (e.g. Jobs → Meaning_Spec)
   | 'foundation'      // LAYER 1: structural skeleton (e.g. Tschichold → Grid_Spec)
   | 'specialist'      // LAYER 2+: domain expertise (e.g. Gaudi → Domain_Spec)
-  | 'expression';     // Final: surface rendering
+  | 'expression'      // Final: surface rendering
+  | 'companion';      // Standalone companion mode — does not participate in work stacks
 
 // ─────────────────────────────────────────
 // HANDOFF PACKAGE

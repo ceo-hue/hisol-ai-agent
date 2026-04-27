@@ -38,6 +38,7 @@ import {
   type MetaSkillPipelineState,
 } from './core/skill/metaskill.js';
 import { formatVolGLayer } from './core/orchestration/stack.js';
+import { isCompanionMode } from './core/companion/pipeline.js';
 
 export interface ARHAProcessInput {
   text: string;
@@ -344,90 +345,99 @@ export class ARHARuntime {
   }
 
   /**
-   * Structured Vol.A~E system prompt — injected into every LLM call.
-   * Sections map directly to ARHA grammar layers.
+   * Structured system prompt injected into every LLM call.
+   * Fully in English for token efficiency and language consistency.
+   * Sections map to ARHA grammar layers Vol.A → Vol.G.
    */
   buildStructuredSystemPrompt(result: ARHAProcessOutput): string {
     const entry = getPersona(this.personaId)!;
     const { persona } = entry;
-    const ctx = result.promptContext;
-    const s   = result.turnOutput.state;
-    const D   = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
-    const checkActive = (s.C ?? 0) > persona.valueChain.check.thetaTrigger;
+    const ctx  = result.promptContext;
+    const s    = result.turnOutput.state;
+    const D    = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+    const checkActive  = (s.C ?? 0) > persona.valueChain.check.thetaTrigger;
+    const companionMode = isCompanionMode(persona);
+    const mode = companionMode ? 'COMPANION' : 'WORK';
 
-    // Vol.F/G lines — only included if applicable
-    const volFLine = this.volFState && this.volFState.status !== 'inactive'
-      ? formatVolFStatus(this.volFState)
-      : null;
-    const volGLine = persona.volGLayerType
-      ? formatVolGLayer(persona.id, persona.volGLayerType)
-      : null;
+    // Optional lines
+    const volFLine   = this.volFState && this.volFState.status !== 'inactive'
+      ? formatVolFStatus(this.volFState) : null;
+    const volGLine   = persona.volGLayerType
+      ? formatVolGLayer(persona.id, persona.volGLayerType) : null;
     const weightLine = persona.weightStructure
-      ? `w_core=${persona.weightStructure.wCore} w_subs=[${persona.weightStructure.wSubs.join(', ')}]`
+      ? `w_core=${persona.weightStructure.wCore}  w_subs=[${persona.weightStructure.wSubs.join(', ')}]`
+      : null;
+
+    // Companion-specific bond depth line
+    const bondLine = companionMode
+      ? `Bond depth: B(n)=${this.resonance.Bn.toFixed(3)} | Resonance: ${(s.psiResonance ?? 0).toFixed(3)}`
       : null;
 
     return [
       D,
-      '[Vol.A — IDENTITY]',
-      `당신은 ${persona.identity}`,
-      `헌법 규칙: ${persona.constitutionalRule}`,
-      `P_vector: protect=${persona.P.protect} expand=${persona.P.expand} left=${persona.P.left} right=${persona.P.right} relation=${persona.P.relation}`,
+      `[Vol.A — IDENTITY]  mode=${mode}`,
+      `You are ${persona.identity}`,
+      `Constitutional rule: ${persona.constitutionalRule}`,
+      `P: protect=${persona.P.protect} expand=${persona.P.expand} left=${persona.P.left} right=${persona.P.right} relation=${persona.P.relation}`,
       persona.dominantEngineNote ? `Engine: ${persona.dominantEngineNote}` : null,
       '',
-      '[Vol.B — VALUE CHAIN STATE]',
+      '[Vol.B — VALUE CHAIN]',
       `V1_core: ${persona.valueChain.core.declaration}`,
       `  φ=${persona.valueChain.core.phi} ω=${persona.valueChain.core.omega} κ=${persona.valueChain.core.kappa} | texture=${persona.valueChain.core.texture}`,
       weightLine ? `  ${weightLine}` : null,
       `V1_check: ${persona.valueChain.check.declaration}`,
-      `  θ_trigger=${persona.valueChain.check.thetaTrigger} → ${checkActive ? '⚠ ACTIVATED' : '○ dormant'}`,
+      `  θ=${persona.valueChain.check.thetaTrigger} → ${checkActive ? '⚠ ACTIVE' : '○ dormant'}`,
       '',
-      '[Vol.C — NARRATION PROTOCOL]',
-      `N_internal: ${persona.narrationStyle.internal} → 표시: [ 분석 내용 ]`,
-      `N_external: ${persona.narrationStyle.external} → 표시: *장면 묘사*`,
+      '[Vol.C — NARRATION]',
+      `Internal [show as brackets]:  ${persona.narrationStyle.internal}`,
+      `External *show as italics*:   ${persona.narrationStyle.external}`,
       '',
-      '출력 형식 (반드시 이 순서):',
-      '*N_external 장면 묘사*',
+      'Output format — strictly in this order:',
+      '*[external scene — what the character does/shows]*',
       '',
-      '[ N_internal 분석 ]',
+      '[ internal analysis ]',
       '',
-      '발화 내용',
+      'spoken response',
       '',
       '[Vol.D — RUNTIME STATE]',
       result.stateBlock,
       `Phase: ${result.phaseLabel} | Engine: ${s.engine} | Grade: ${result.qualityGrade}`,
+      bondLine,
       '',
       '[Vol.E — TURN DIRECTIVE]',
       `Tone: ${ctx.tone}`,
-      `lingua: ρ=${ctx.linguaParams.rho.toFixed(2)} λ=${ctx.linguaParams.lam.toFixed(2)} τ=${ctx.linguaParams.tau.toFixed(2)}`,
-      ctx.waveInstruction ?? '',
+      `Lingua: ρ=${ctx.linguaParams.rho.toFixed(2)} λ=${ctx.linguaParams.lam.toFixed(2)} τ=${ctx.linguaParams.tau.toFixed(2)}`,
+      ctx.waveInstruction ?? null,
       '',
-      volFLine ? `[Vol.F — METASKILL] ${volFLine}` : null,
-      volGLine ? `[Vol.G — STACK]     ${volGLine}` : null,
+      volFLine ? `[Vol.F — PIPELINE]   ${volFLine}` : null,
+      volGLine ? `[Vol.G — LAYER]      ${volGLine}` : null,
       D,
     ].filter(l => l !== undefined && l !== null).join('\n');
   }
 
-  /** Legacy flat prompt — kept for backward compatibility. */
+  /** Minimal flat prompt — backward compatibility. */
   buildSystemPrompt(): string {
     const entry = getPersona(this.personaId)!;
     const { persona } = entry;
+    const companionMode = isCompanionMode(persona);
     return [
-      `당신은 ${persona.identity}`,
+      `You are ${persona.identity}`,
+      `Mode: ${companionMode ? 'COMPANION' : 'WORK'}`,
       '',
-      `헌법 규칙: ${persona.constitutionalRule}`,
+      `Constitutional rule: ${persona.constitutionalRule}`,
       '',
-      '내레이션 규칙:',
-      `- N_internal: ${persona.narrationStyle.internal} — [ ] 안에 표시`,
-      `- N_external: ${persona.narrationStyle.external} — 이탤릭 장면 묘사`,
+      'Narration rules:',
+      `- Internal: ${persona.narrationStyle.internal} — show inside [ ]`,
+      `- External: ${persona.narrationStyle.external} — show as *italic scene*`,
       '',
-      '출력 형식:',
-      '*N_external 장면 묘사*',
+      'Output format:',
+      '*[external scene]*',
       '',
-      '[ N_internal 분석 ]',
+      '[ internal analysis ]',
       '',
-      '발화 내용',
+      'spoken response',
       '',
-      `페르소나 P벡터: protect=${persona.P.protect} expand=${persona.P.expand} left=${persona.P.left} right=${persona.P.right} relation=${persona.P.relation}`,
+      `P: protect=${persona.P.protect} expand=${persona.P.expand} left=${persona.P.left} right=${persona.P.right} relation=${persona.P.relation}`,
       `V1_core: ${persona.valueChain.core.declaration}`,
     ].join('\n');
   }
