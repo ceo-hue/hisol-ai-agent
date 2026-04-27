@@ -49,14 +49,22 @@ const COMPETENCY_KEYWORDS: Record<CompetencyTag, string[]> = {
   visual_system:        ['비주얼', '시각', '디자인 시스템', 'visual system', '컬러', '색상', '색채', '팔레트'],
   semantics:            ['의미', '본질', '핵심', '철학', 'meaning', 'essence', 'why', '존재', '정체성'],
   storytelling:         ['스토리', '내러티브', '이야기', 'storytelling', '서사', '스크립트', '스토리텔링'],
-  system_design:        ['시스템', '아키텍처', '설계', 'system design', '구조 설계', '인프라'],
-  data_analysis:        ['데이터', '분석', 'data', 'analysis', '지표', '통계', '리포트'],
+  system_design:        ['시스템', '아키텍처', '설계', 'system design', '구조 설계', '인프라', '가치사슬', 'value chain'],
+  data_analysis:        ['데이터', '분석', 'data', 'analysis', '지표', '통계', '리포트', '시장 조사', '산업 분석'],
   copywriting:          ['카피', '문구', '슬로건', 'copy', 'copywriting', '헤드라인', '광고 문구'],
   product_vision:       ['제품 비전', '방향성', '로드맵', 'product vision', '전략적 방향', '제품 전략'],
   organic_structure:    ['유기적', '자연', '구조', 'organic', '형태', '패턴', '자연 구조', '생체'],
   grid_layout:          ['그리드', '레이아웃', '비례', 'grid', 'proportion', '황금비', '여백', '마진'],
   emotional_connection: ['감성', '공감', '관계', '감정', 'emotional', '따뜻', '친밀', '교감'],
   code_architecture:    ['코드', '개발', '프로그래밍', 'code', 'typescript', 'javascript', '기술'],
+  competitive_strategy: [
+    '경쟁전략', '경쟁 전략', '포지셔닝', '경쟁우위', '경쟁 분석', '산업 구조',
+    '파이브포스', 'five forces', '경쟁자 분석', '시장 포지셔닝', '차별화 전략',
+    '원가우위', '집중화', '진입장벽', '대체재', '공급자 협상력', '구매자 협상력',
+    'competitive strategy', 'competitive advantage', 'positioning', 'market analysis',
+    'industry analysis', 'generic strategy', 'cost leadership', 'differentiation',
+    'strategic positioning', '전략 수립', '경쟁력', 'porter',
+  ],
 };
 
 const PERSONALITY_KEYWORDS: Record<PersonalityTag, string[]> = {

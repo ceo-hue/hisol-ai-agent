@@ -257,6 +257,62 @@ export const STACK_PRODUCT_DESIGN_2: StackDefinition = {
   ],
 };
 
+/**
+ * STACK_STRATEGY_2
+ * Porter (경쟁전략) → Rams (제품·UX 설계)
+ * 2-layer: 포지셔닝 전략 + 제품 설계.
+ */
+export const STACK_STRATEGY_2: StackDefinition = {
+  stackId:     'STACK_STRATEGY_2',
+  description: '2-레이어 경쟁전략·제품 파이프라인',
+  useCase:     '경쟁 포지셔닝 / 제품 전략 / 스타트업 PMF / 시장 진입 설계',
+  layers: [
+    {
+      personaId:  'Porter',
+      layerType:  'pre_foundation',
+      outputType: 'Strategy_Spec',
+      required:   true,
+    },
+    {
+      personaId:  'Rams',
+      layerType:  'foundation',
+      outputType: 'Product_Spec',
+      required:   true,
+    },
+  ],
+};
+
+/**
+ * STACK_STRATEGY_3
+ * Porter (경쟁전략) → Ogilvy (브랜드 언어) → Rams (제품·UX 설계)
+ * 3-layer: 포지셔닝 + 메시지 + 제품 풀 파이프라인.
+ */
+export const STACK_STRATEGY_3: StackDefinition = {
+  stackId:     'STACK_STRATEGY_3',
+  description: '3-레이어 전략·브랜드·제품 풀 파이프라인',
+  useCase:     '전략적 포지셔닝 + 브랜드 언어 + 제품 설계 통합',
+  layers: [
+    {
+      personaId:  'Porter',
+      layerType:  'pre_foundation',
+      outputType: 'Strategy_Spec',
+      required:   true,
+    },
+    {
+      personaId:  'Ogilvy',
+      layerType:  'foundation',
+      outputType: 'Copy_Spec',
+      required:   false,
+    },
+    {
+      personaId:  'Rams',
+      layerType:  'foundation',
+      outputType: 'Product_Spec',
+      required:   true,
+    },
+  ],
+};
+
 /** All predefined stacks */
 export const PREDEFINED_STACKS: StackDefinition[] = [
   STACK_VISUAL_DESIGN_3,
@@ -264,6 +320,8 @@ export const PREDEFINED_STACKS: StackDefinition[] = [
   STACK_SPACE_EXPERIENCE_3,
   STACK_BRAND_COPY_2,
   STACK_PRODUCT_DESIGN_2,
+  STACK_STRATEGY_2,
+  STACK_STRATEGY_3,
 ];
 
 /**

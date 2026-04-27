@@ -53,21 +53,22 @@ export const ROLE_PRIORITY: Record<RoleType, number> = {
 // ─────────────────────────────────────────
 
 export type CompetencyTag =
-  | 'branding'            // 브랜드 아이덴티티
-  | 'typography'          // 타이포그래피·서체
-  | 'spatial_design'      // 공간·건축 설계
-  | 'ux_strategy'         // UX 전략·사용자 경험
-  | 'visual_system'       // 비주얼 시스템·컬러
-  | 'semantics'           // 의미론·본질 탐색
-  | 'storytelling'        // 스토리·내러티브
-  | 'system_design'       // 시스템 설계·아키텍처
-  | 'data_analysis'       // 데이터 분석·검증
-  | 'copywriting'         // 카피·언어 전략
-  | 'product_vision'      // 제품 비전·방향성
-  | 'organic_structure'   // 유기적 구조·자연 형태
-  | 'grid_layout'         // 그리드·비례·여백
-  | 'emotional_connection'// 감성 연결·공감
-  | 'code_architecture';  // 코드·기술 아키텍처
+  | 'branding'              // 브랜드 아이덴티티
+  | 'typography'            // 타이포그래피·서체
+  | 'spatial_design'        // 공간·건축 설계
+  | 'ux_strategy'           // UX 전략·사용자 경험
+  | 'visual_system'         // 비주얼 시스템·컬러
+  | 'semantics'             // 의미론·본질 탐색
+  | 'storytelling'          // 스토리·내러티브
+  | 'system_design'         // 시스템 설계·아키텍처
+  | 'data_analysis'         // 데이터 분석·검증
+  | 'copywriting'           // 카피·언어 전략
+  | 'product_vision'        // 제품 비전·방향성
+  | 'organic_structure'     // 유기적 구조·자연 형태
+  | 'grid_layout'           // 그리드·비례·여백
+  | 'emotional_connection'  // 감성 연결·공감
+  | 'code_architecture'     // 코드·기술 아키텍처
+  | 'competitive_strategy'; // 경쟁전략·포지셔닝·산업 구조 분석 (Porter)
 
 // ─────────────────────────────────────────
 // 캐릭터성격 (Personality)
