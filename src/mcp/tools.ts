@@ -21,6 +21,7 @@ import { StackExecutor } from '../core/orchestration/executor.js';
 import { generateCharacterPersona, listArchetypes } from '../core/companion/generator.js';
 import { registerPersona } from '../personas/registry.js';
 import { formatAboutResponse } from '../core/identity/why.js';
+import { route, previewRoute } from '../core/routing/router.js';
 import type { PersonaVector } from '../core/identity/persona.js';
 
 // ─────────────────────────────────────────
@@ -581,7 +582,111 @@ export const ARHA_TOOLS = [
   },
 
 
-  // ── 10. arha_about (Vol.0 — Identity & Usage Guide) ────────────────────────
+  // ── 10. arha_route (Vol.R — Auto Router) ────────────────────────────────────
+  {
+    name: 'arha_route',
+    description:
+      'Vol.R automatic persona router — analyzes the request and selects/assembles the best-fit persona stack. ' +
+      'No need to specify personaId or stackId manually. ' +
+      'Extracts 4-axis intent (조직·역할·핵심역량·캐릭터성격) and scores all registered personas. ' +
+      'previewOnly:true returns routing reasoning without executing. ' +
+      'Runs the matched stack and returns composedPrompt for Claude API injection.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        input: {
+          type: 'string',
+          description: '사용자 요청 — 한국어·영어 혼용 가능. 라우터가 자동으로 최적 스택 선택',
+        },
+        maxTurnsPerLayer: {
+          type: 'number',
+          description: '레이어당 최대 턴 수 (기본: 3)',
+          default: 3,
+        },
+        previewOnly: {
+          type: 'boolean',
+          description: '라우팅 분석만 반환, 실행 없음 (기본: false)',
+          default: false,
+        },
+      },
+      required: ['input'],
+    },
+    handler: async (args: {
+      input:            string;
+      maxTurnsPerLayer?: number;
+      previewOnly?:     boolean;
+    }) => {
+      // Preview mode — routing analysis only
+      if (args.previewOnly) {
+        const preview = previewRoute(args.input);
+        return {
+          mode:          'preview',
+          intent:        preview.intent,
+          source:        preview.source,
+          reasoning:     preview.reasoning,
+          stackPreview:  preview.stackPreview,
+          topScores:     preview.scores.slice(0, 5).map(s => ({
+            personaId:        s.personaId,
+            totalScore:       s.totalScore,
+            competencyScore:  s.breakdown.competencyScore,
+            organizationScore: s.breakdown.organizationScore,
+          })),
+        };
+      }
+
+      // Execution mode — route + run
+      const routeResult = route(args.input);
+
+      try {
+        // predefined stack → StackExecutor.run(), dynamic stack → StackExecutor.runDef()
+        const execResult = routeResult.source === 'predefined'
+          ? await StackExecutor.run(
+              routeResult.stackDef.stackId,
+              args.input,
+              { maxTurnsPerLayer: args.maxTurnsPerLayer ?? 3 },
+            )
+          : await StackExecutor.runDef(
+              routeResult.stackDef,
+              args.input,
+              { maxTurnsPerLayer: args.maxTurnsPerLayer ?? 3 },
+            );
+
+        return {
+          mode:    'execute',
+          routing: {
+            source:    routeResult.source,
+            reasoning: routeResult.reasoning,
+            stackId:   routeResult.stackDef.stackId,
+            layers:    routeResult.stackDef.layers.map(l => l.personaId),
+          },
+          stackId:        execResult.stackId,
+          status:         execResult.status,
+          totalTurns:     execResult.totalTurns,
+          layers: execResult.layers.map(lr => ({
+            personaId:    lr.personaId,
+            layerType:    lr.layerType,
+            finalPhase:   lr.finalPhase,
+            finalC:       lr.finalC,
+            qualityGrade: lr.qualityGrade,
+          })),
+          composedPrompt: execResult.composedPrompt,
+        };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return {
+          mode:    'execute_failed',
+          routing: {
+            source:    routeResult.source,
+            reasoning: routeResult.reasoning,
+            stackId:   routeResult.stackDef.stackId,
+          },
+          error: msg,
+        };
+      }
+    },
+  },
+
+  // ── 11. arha_about (Vol.0 — Identity & Usage Guide) ────────────────────────
   {
     name: 'arha_about',
     description:

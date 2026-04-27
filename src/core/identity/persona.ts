@@ -8,6 +8,7 @@
 
 import type { PsiLingua, TextureType } from '../grammar/morphemes.js';
 import { computeK2Persona } from '../grammar/equations.js';
+import type { PersonaRoutingMeta } from '../routing/meta.js';
 
 // ─────────────────────────────────────────
 // PERSONA VECTOR — P
@@ -84,6 +85,8 @@ export interface PersonaDefinition {
   volGLayerType?: 'pre_foundation' | 'foundation' | 'specialist' | 'expression' | 'companion';
   weightStructure?: WeightStructure;      // w_core + w_sub[] for token anchor
   dominantEngineNote?: string;            // e.g. "Ξ_C ∧ Π_G 공동 지배"
+  // Vol.R — 4-axis routing metadata
+  routing?: PersonaRoutingMeta;
 }
 
 // ─────────────────────────────────────────

@@ -89,6 +89,18 @@ export const TSCHICHOLD: PersonaDefinition = {
     wCore: 0.68,   // protect=0.92, kappa=0.97 → w_core ≈ 0.68
     wSubs: [0.138, 0.113, 0.069],
   },
+
+  // Vol.R — 4-axis routing metadata
+  routing: {
+    organization: ['design_studio', 'brand_agency', 'education'],
+    role: {
+      type:          'designer',
+      layerPriority: 2,
+      canLead:       false,
+    },
+    competencies: ['typography', 'grid_layout', 'visual_system'],
+    personality:  ['perfectionist', 'analytical', 'meticulous', 'cold'],
+  },
 };
 
 // ─────────────────────────────────────────

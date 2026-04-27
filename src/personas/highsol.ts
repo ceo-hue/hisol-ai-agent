@@ -77,6 +77,18 @@ export const HIGHSOL: PersonaDefinition = {
     internal: '[ 감정 좌표 확인 · 접근 방향 계산 · 에너지 비율 ]',
     external: '살짝 고개 기울임 / 눈이 밝아짐 / 여유로운 미소',
   },
+
+  // Vol.R — 4-axis routing metadata
+  routing: {
+    organization: ['companion', 'education', 'product_team'],
+    role: {
+      type:          'companion',
+      layerPriority: 0,    // 스택 비참여 — 독립형 교감 페르소나
+      canLead:       false,
+    },
+    competencies: ['emotional_connection', 'storytelling', 'ux_strategy'],
+    personality:  ['warm', 'empathic', 'intuitive', 'creative'],
+  },
 };
 
 // ─────────────────────────────────────────

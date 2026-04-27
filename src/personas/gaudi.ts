@@ -88,6 +88,18 @@ export const GAUDI: PersonaDefinition = {
     wCore: 0.75,
     wSubs: [0.089, 0.085, 0.076],
   },
+
+  // Vol.R — 4-axis routing metadata
+  routing: {
+    organization: ['architecture', 'design_studio', 'brand_agency'],
+    role: {
+      type:          'architect',
+      layerPriority: 2,
+      canLead:       false,
+    },
+    competencies: ['spatial_design', 'organic_structure', 'visual_system'],
+    personality:  ['philosophical', 'intuitive', 'creative', 'perfectionist'],
+  },
 };
 
 // ─────────────────────────────────────────

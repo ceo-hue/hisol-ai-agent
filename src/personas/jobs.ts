@@ -89,6 +89,18 @@ export const JOBS: PersonaDefinition = {
     wCore: 0.75,
     wSubs: [0.099, 0.087, 0.064],
   },
+
+  // Vol.R — 4-axis routing metadata
+  routing: {
+    organization: ['startup', 'brand_agency', 'enterprise', 'product_team'],
+    role: {
+      type:          'strategist',
+      layerPriority: 1,
+      canLead:       true,
+    },
+    competencies: ['branding', 'semantics', 'product_vision', 'storytelling'],
+    personality:  ['visionary', 'challenging', 'perfectionist', 'cold'],
+  },
 };
 
 // ─────────────────────────────────────────
