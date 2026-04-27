@@ -413,7 +413,11 @@ export const ARHA_TOOLS = [
             'STACK_PRODUCT_DESIGN_2 (Jobs→Rams) ' +
             '— Porter anchor: ' +
             'STACK_STRATEGY_2 (Porter→Rams) | ' +
-            'STACK_STRATEGY_3 (Porter→Ogilvy→Rams)',
+            'STACK_STRATEGY_3 (Porter→Ogilvy→Rams) ' +
+            '— Jobs anchor (Phase 2): ' +
+            'STACK_EXPERIENCE_2 (Jobs→Eames) | ' +
+            'STACK_PRODUCT_EXP_3 (Jobs→Rams→Eames) | ' +
+            'STACK_INNOVATION_3 (Jobs→Rams→DaVinci)',
         },
         input: {
           type: 'string',

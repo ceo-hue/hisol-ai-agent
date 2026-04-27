@@ -313,13 +313,105 @@ export const STACK_STRATEGY_3: StackDefinition = {
   ],
 };
 
+/**
+ * STACK_EXPERIENCE_2
+ * Jobs (본질) → Eames (산업·경험 디자인)
+ * 2-layer: 의미 + 사용자 경험 통합. 제품·서비스·공간 경험 설계.
+ */
+export const STACK_EXPERIENCE_2: StackDefinition = {
+  stackId:     'STACK_EXPERIENCE_2',
+  description: '2-레이어 경험 디자인 파이프라인',
+  useCase:     '제품 경험 / 서비스 디자인 / 사용자 여정 / 산업 디자인',
+  layers: [
+    {
+      personaId:  'Jobs',
+      layerType:  'pre_foundation',
+      outputType: 'Meaning_Spec',
+      required:   true,
+    },
+    {
+      personaId:  'Eames',
+      layerType:  'foundation',
+      outputType: 'Experience_Spec',
+      required:   true,
+    },
+  ],
+};
+
+/**
+ * STACK_PRODUCT_EXP_3
+ * Jobs (본질) → Rams (제품·UX 설계) → Eames (경험 통합·디테일)
+ * 3-layer: 의미 + 기능 설계 + 경험 완성. 제품 기능과 사용자 경험의 완전한 통합.
+ */
+export const STACK_PRODUCT_EXP_3: StackDefinition = {
+  stackId:     'STACK_PRODUCT_EXP_3',
+  description: '3-레이어 제품·경험 통합 파이프라인',
+  useCase:     '제품 기능 + 사용자 경험 통합 / 하드웨어·소프트웨어 완성도',
+  layers: [
+    {
+      personaId:  'Jobs',
+      layerType:  'pre_foundation',
+      outputType: 'Meaning_Spec',
+      required:   true,
+    },
+    {
+      personaId:  'Rams',
+      layerType:  'foundation',
+      outputType: 'Product_Spec',
+      required:   true,
+    },
+    {
+      personaId:  'Eames',
+      layerType:  'specialist',
+      outputType: 'Experience_Spec',
+      required:   false,
+    },
+  ],
+};
+
+/**
+ * STACK_INNOVATION_3
+ * Jobs (본질) → Rams (제품 설계) → DaVinci (교차 도메인 혁신 프로토타입)
+ * 3-layer: 의미 + 기능 설계 + 교차 도메인 혁신. 제품 혁신의 완전한 파이프라인.
+ */
+export const STACK_INNOVATION_3: StackDefinition = {
+  stackId:     'STACK_INNOVATION_3',
+  description: '3-레이어 제품 혁신 파이프라인',
+  useCase:     '제품 혁신 / 교차 도메인 아이디어 통합 / 프로토타이핑 / R&D',
+  layers: [
+    {
+      personaId:  'Jobs',
+      layerType:  'pre_foundation',
+      outputType: 'Meaning_Spec',
+      required:   true,
+    },
+    {
+      personaId:  'Rams',
+      layerType:  'foundation',
+      outputType: 'Product_Spec',
+      required:   true,
+    },
+    {
+      personaId:  'DaVinci',
+      layerType:  'specialist',
+      outputType: 'Prototype_Spec',
+      required:   false,
+    },
+  ],
+};
+
 /** All predefined stacks */
 export const PREDEFINED_STACKS: StackDefinition[] = [
+  // Jobs anchor
   STACK_VISUAL_DESIGN_3,
   STACK_CONCEPT_DESIGN_2,
   STACK_SPACE_EXPERIENCE_3,
   STACK_BRAND_COPY_2,
   STACK_PRODUCT_DESIGN_2,
+  STACK_EXPERIENCE_2,
+  STACK_PRODUCT_EXP_3,
+  STACK_INNOVATION_3,
+  // Porter anchor
   STACK_STRATEGY_2,
   STACK_STRATEGY_3,
 ];

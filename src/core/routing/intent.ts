@@ -52,10 +52,10 @@ const COMPETENCY_KEYWORDS: Record<CompetencyTag, string[]> = {
   system_design:        ['시스템', '아키텍처', '설계', 'system design', '구조 설계', '인프라', '가치사슬', 'value chain'],
   data_analysis:        ['데이터', '분석', 'data', 'analysis', '지표', '통계', '리포트', '시장 조사', '산업 분석'],
   copywriting:          ['카피', '문구', '슬로건', 'copy', 'copywriting', '헤드라인', '광고 문구'],
-  product_vision:       ['제품 비전', '방향성', '로드맵', 'product vision', '전략적 방향', '제품 전략'],
-  organic_structure:    ['유기적', '자연', '구조', 'organic', '형태', '패턴', '자연 구조', '생체'],
+  product_vision:       ['제품 비전', '방향성', '로드맵', 'product vision', '전략적 방향', '제품 전략', '프로토타입', 'prototype', '혁신', 'innovation', '아이디어 실체화'],
+  organic_structure:    ['유기적', '자연', '구조', 'organic', '형태', '패턴', '자연 구조', '생체', '교차 도메인', 'cross domain', '르네상스', 'renaissance'],
   grid_layout:          ['그리드', '레이아웃', '비례', 'grid', 'proportion', '황금비', '여백', '마진'],
-  emotional_connection: ['감성', '공감', '관계', '감정', 'emotional', '따뜻', '친밀', '교감'],
+  emotional_connection: ['감성', '공감', '관계', '감정', 'emotional', '따뜻', '친밀', '교감', '경험 디자인', 'experience design', '사용자 경험', '디테일', 'detail', '산업 디자인', 'industrial design'],
   code_architecture:    ['코드', '개발', '프로그래밍', 'code', 'typescript', 'javascript', '기술'],
   competitive_strategy: [
     '경쟁전략', '경쟁 전략', '포지셔닝', '경쟁우위', '경쟁 분석', '산업 구조',
