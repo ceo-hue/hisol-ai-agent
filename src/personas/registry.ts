@@ -8,6 +8,8 @@ import { HIGHSOL, HIGHSOL_SKILLS } from './highsol.js';
 import { GAUDI, GAUDI_SKILLS } from './gaudi.js';
 import { JOBS, JOBS_SKILLS } from './jobs.js';
 import { TSCHICHOLD, TSCHICHOLD_SKILLS } from './tschichold.js';
+import { OGILVY, OGILVY_SKILLS } from './ogilvy.js';
+import { RAMS, RAMS_SKILLS } from './rams.js';
 
 export interface PersonaEntry {
   persona: PersonaDefinition;
@@ -21,6 +23,8 @@ registry.set('HighSol',    { persona: HIGHSOL,    skills: HIGHSOL_SKILLS });
 registry.set('Jobs',       { persona: JOBS,       skills: JOBS_SKILLS });
 registry.set('Tschichold', { persona: TSCHICHOLD, skills: TSCHICHOLD_SKILLS });
 registry.set('Gaudi',      { persona: GAUDI,      skills: GAUDI_SKILLS });
+registry.set('Ogilvy',     { persona: OGILVY,     skills: OGILVY_SKILLS });
+registry.set('Rams',       { persona: RAMS,       skills: RAMS_SKILLS });
 
 export function getPersona(id: string): PersonaEntry | undefined {
   return registry.get(id);
@@ -34,4 +38,4 @@ export function registerPersona(id: string, entry: PersonaEntry): void {
   registry.set(id, entry);
 }
 
-export { HIGHSOL, JOBS, TSCHICHOLD, GAUDI };
+export { HIGHSOL, JOBS, TSCHICHOLD, GAUDI, OGILVY, RAMS };

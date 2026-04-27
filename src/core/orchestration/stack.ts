@@ -207,11 +207,63 @@ export const STACK_SPACE_EXPERIENCE_3: StackDefinition = {
   ],
 };
 
+/**
+ * STACK_BRAND_COPY_2
+ * Jobs (의미) → Ogilvy (카피·브랜드 언어)
+ * 2-layer: meaning + language. 브랜드 캠페인·광고 카피.
+ */
+export const STACK_BRAND_COPY_2: StackDefinition = {
+  stackId:     'STACK_BRAND_COPY_2',
+  description: '2-레이어 브랜드 카피 파이프라인',
+  useCase:     '브랜드 캠페인 / 광고 카피 / 슬로건 / 브랜드 언어 시스템',
+  layers: [
+    {
+      personaId:  'Jobs',
+      layerType:  'pre_foundation',
+      outputType: 'Meaning_Spec',
+      required:   true,
+    },
+    {
+      personaId:  'Ogilvy',
+      layerType:  'foundation',
+      outputType: 'Copy_Spec',
+      required:   true,
+    },
+  ],
+};
+
+/**
+ * STACK_PRODUCT_DESIGN_2
+ * Jobs (본질) → Rams (기능·UX 설계)
+ * 2-layer: meaning + product design. 제품·앱·서비스 설계.
+ */
+export const STACK_PRODUCT_DESIGN_2: StackDefinition = {
+  stackId:     'STACK_PRODUCT_DESIGN_2',
+  description: '2-레이어 제품 설계 파이프라인',
+  useCase:     '제품 설계 / UX 아키텍처 / 앱·서비스 구조 / 기능 우선순위',
+  layers: [
+    {
+      personaId:  'Jobs',
+      layerType:  'pre_foundation',
+      outputType: 'Meaning_Spec',
+      required:   true,
+    },
+    {
+      personaId:  'Rams',
+      layerType:  'foundation',
+      outputType: 'Product_Spec',
+      required:   true,
+    },
+  ],
+};
+
 /** All predefined stacks */
 export const PREDEFINED_STACKS: StackDefinition[] = [
   STACK_VISUAL_DESIGN_3,
   STACK_CONCEPT_DESIGN_2,
   STACK_SPACE_EXPERIENCE_3,
+  STACK_BRAND_COPY_2,
+  STACK_PRODUCT_DESIGN_2,
 ];
 
 /**
