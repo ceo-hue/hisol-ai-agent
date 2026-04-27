@@ -26,6 +26,12 @@ import {
   type LayerOutput,
   type VolGLayerType,
 } from './stack.js';
+import {
+  extractSemanticVector,
+  computeLayerProjection,
+  type ProjectedHints,
+} from './projection.js';
+import { getPersona } from '../../personas/registry.js';
 
 // ─────────────────────────────────────────
 // RESULT TYPES
@@ -71,6 +77,8 @@ export interface ArtifactSpec {
     engine:       string;
     qualityGrade: string;
   };
+  // PATCH_C: Tensor projection hints — structural bias for the NEXT downstream layer
+  projectionHints?: ProjectedHints;
 }
 
 const ARTIFACT_SCHEMAS: Record<string, Record<string, string>> = {
@@ -136,14 +144,27 @@ function buildLayerInput(
     ].filter(Boolean).join('\n');
   }
 
-  // Downstream layer — inject upstream as immutable constraints
-  const upstream = pkg.layer_outputs.map(o =>
-    `[${o.layer.toUpperCase()} · ${o.artifact_type} — 불가침]\n` +
-    Object.entries(o.payload as Record<string, unknown>)
-      .filter(([k]) => !['artifact_type', 'arha_state', 'constraints'].includes(k))
-      .map(([k, v]) => `  ${k}: ${JSON.stringify(v)}`)
-      .join('\n')
-  ).join('\n\n');
+  // Downstream layer — inject upstream as immutable constraints + projection hints
+  const upstream = pkg.layer_outputs.map(o => {
+    const payload = o.payload as Record<string, unknown>;
+    const lines: string[] = [
+      `[${o.layer.toUpperCase()} · ${o.artifact_type} — IMMUTABLE]`,
+    ];
+
+    // Standard constraint fields
+    Object.entries(payload)
+      .filter(([k]) => !['artifact_type', 'arha_state', 'constraints', 'projectionHints'].includes(k))
+      .forEach(([k, v]) => lines.push(`  ${k}: ${JSON.stringify(v)}`));
+
+    // PATCH_C — inject projection as structural guidance
+    const proj = payload['projectionHints'] as { semanticSummary?: string; densityHint?: string; proportionHint?: string; rhythmHint?: string; weightHint?: string; organicismHint?: string; sensoryHint?: string } | undefined;
+    if (proj?.semanticSummary) {
+      lines.push(`  [Tensor Projection] ${proj.semanticSummary}`);
+      lines.push(`  structural_bias: density=${proj.densityHint} proportion=${proj.proportionHint} rhythm=${proj.rhythmHint}`);
+    }
+
+    return lines.join('\n');
+  }).join('\n\n');
 
   return [
     originalInput,
@@ -194,11 +215,30 @@ function buildFollowUpInput(layerType: VolGLayerType, turnIndex: number): string
 // ─────────────────────────────────────────
 
 function extractArtifact(
-  result: ARHAProcessOutput,
+  result:       ARHAProcessOutput,
   artifactType: string,
-  pkg: HandoffPackage,
+  pkg:          HandoffPackage,
+  personaId:    string,
+  layerType:    VolGLayerType,
 ): ArtifactSpec {
   const schema = ARTIFACT_SCHEMAS[artifactType] ?? {};
+
+  // PATCH_C — Tensor Projection: compute structural hints for the next layer.
+  // Projection is embedded in this artifact so downstream receives it as constraint.
+  const personaEntry = getPersona(personaId);
+  const P = personaEntry?.persona.P ?? { expand: 0.55, protect: 0.55 };
+  const semantic = extractSemanticVector(result.arhaState, P);
+
+  // Determine next layer type to project toward.
+  const layerOrder: VolGLayerType[] = ['pre_foundation', 'foundation', 'specialist', 'expression'];
+  const currIdx = layerOrder.indexOf(layerType);
+  const nextLayer = currIdx >= 0 && currIdx < layerOrder.length - 1
+    ? layerOrder[currIdx + 1]
+    : null;
+
+  const projectionHints = nextLayer
+    ? computeLayerProjection({ fromLayer: layerType, toLayer: nextLayer, semantic })
+    : null;
 
   return {
     artifact_type: artifactType,
@@ -210,6 +250,7 @@ function extractArtifact(
       engine:       result.arhaState.engine,
       qualityGrade: result.qualityGrade,
     },
+    ...(projectionHints ? { projectionHints } : {}),
   };
 }
 
@@ -342,8 +383,8 @@ export class StackExecutor {
 
       if (!lastResult) continue;
 
-      // Build artifact + system prompt for this layer
-      const artifact    = extractArtifact(lastResult, layerDef.outputType, pkg);
+      // Build artifact + system prompt for this layer (includes PATCH_C projection)
+      const artifact    = extractArtifact(lastResult, layerDef.outputType, pkg, layerDef.personaId, layerDef.layerType);
       const systemPrompt = runtime.buildStructuredSystemPrompt(lastResult);
       const volFStatus  = lastResult.volF
         ? `${lastResult.volF.currentLayer ?? 'DONE'} [${lastResult.volF.completedLayers.join('→')}]`

@@ -44,10 +44,84 @@ export function computePsiLingua(rho: number, lam: number, tau: number): PsiLing
 /** Phase transition gate: |∇×σ|² ⋛ k²_final */
 export type PhaseState = 'Wave' | 'Transition' | 'Particle';
 
+/** Legacy hard-threshold gate — kept for backward compatibility / testing. */
 export function phaseGate(curlSq: number, k2Final: number): PhaseState {
   if (curlSq >= k2Final) return 'Particle';
   if (Math.abs(curlSq - k2Final) < 0.02) return 'Transition';
   return 'Wave';
+}
+
+// ─────────────────────────────────────────
+// BOLTZMANN PHASE GATE (Gemini Chip Circuit PART_3)
+// Replaces hard threshold with thermodynamic probability.
+// ─────────────────────────────────────────
+
+/**
+ * Compute contextual entropy temperature T for the Boltzmann gate.
+ *
+ *   T = 0.40
+ *     + min(textLen / 500, 1) × 0.25   — longer / noisier input → higher T
+ *     + min(waveCount / 8,  1) × 0.20  — more wave cycles → more entropic
+ *     − |delta| × 0.10                 — strong clear signal → lower T
+ *
+ * Clamped to [0.10, 0.85].
+ */
+export function computeTEntropy(params: {
+  textLen:   number;
+  waveCount: number;
+  delta:     number | null;
+}): number {
+  const { textLen, waveCount, delta } = params;
+  const textFactor  = Math.min(textLen / 500, 1) * 0.25;
+  const waveFactor  = Math.min(waveCount / 8,  1) * 0.20;
+  const deltaFactor = (delta !== null ? Math.abs(delta) : 0) * 0.10;
+
+  return Math.min(0.85, Math.max(0.10, 0.40 + textFactor + waveFactor - deltaFactor));
+}
+
+/**
+ * Boltzmann phase gate — probabilistic phase decision.
+ *
+ *   k2_adj    = k2Final × clamp(wCoreDynamic / 0.65, 0.85, 1.10)
+ *   P(Particle) = 1 / (1 + exp(−(curlSq − k2_adj) / T_entropy))
+ *
+ *   P ≥ 0.70  → Particle  💎
+ *   P ≥ 0.35  → Transition ⚡
+ *   else      → Wave      🌊
+ *
+ * At high T (ambiguous context): gate is "soft" — requires stronger curlSq overshoot.
+ * At low T (clear intent):       gate is "sharp" — snaps decisively to Particle.
+ *
+ * wCoreDynamic modulates the effective threshold:
+ *   lower w_dyn (more empathic/flexible) → lower k2_adj → easier Particle transition.
+ */
+export function boltzmannPhaseGate(params: {
+  curlSq:       number;
+  k2Final:      number;
+  tEntropy:     number;   // T_effective — already zeroed by Absolute Zero guard if needed
+  wCoreDynamic: number;
+}): { state: PhaseState; pParticle: number } {
+  const { curlSq, k2Final, tEntropy, wCoreDynamic } = params;
+
+  // PATCH_A — Absolute Zero: T=0 forces immediate Particle (V1_check emergency lockdown).
+  // At T=0 the sigmoid becomes a step function with division-by-zero edge case;
+  // we handle it explicitly to guarantee deterministic behaviour.
+  if (tEntropy === 0) {
+    return { state: 'Particle', pParticle: 1.0 };
+  }
+
+  const wRatio = Math.min(1.10, Math.max(0.85, wCoreDynamic / 0.65));
+  const k2Adj  = k2Final * wRatio;
+
+  const exponent  = -(curlSq - k2Adj) / tEntropy;
+  const pParticle = 1 / (1 + Math.exp(exponent));
+
+  const state: PhaseState =
+    pParticle >= 0.70 ? 'Particle' :
+    pParticle >= 0.35 ? 'Transition' :
+    'Wave';
+
+  return { state, pParticle };
 }
 
 // ─────────────────────────────────────────

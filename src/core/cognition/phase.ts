@@ -6,7 +6,7 @@
  */
 
 import type { Sigma, Pi, Upsilon } from '../grammar/morphemes.js';
-import { phaseGate, type PhaseState } from '../grammar/equations.js';
+import { phaseGate, boltzmannPhaseGate, type PhaseState } from '../grammar/equations.js';
 import { curlSquared } from '../grammar/operators.js';
 
 export { PhaseState };
@@ -16,6 +16,7 @@ export interface PhaseResult {
   curlSq: number;
   k2Final: number;
   autoTriggers: AutoTrigger[];
+  pParticle: number;  // Boltzmann P(Particle) [0,1]; 0 when legacy gate used
 }
 
 export interface AutoTrigger {
@@ -40,15 +41,33 @@ export interface ParticleHandoff {
 
 /**
  * DECIDE stage — routes to Wave, Transition, or Particle.
+ *
+ * When tEntropy and wCoreDynamic are provided, uses the Boltzmann gate
+ * (probabilistic thermodynamic phase transition) instead of the legacy
+ * hard-threshold gate.
  */
 export function stageDecide(params: {
-  sigma: Sigma;
-  prevSigma: Sigma | undefined;
-  k2Final: number;
+  sigma:         Sigma;
+  prevSigma:     Sigma | undefined;
+  k2Final:       number;
+  tEntropy?:     number;    // contextual temperature T (Boltzmann gate)
+  wCoreDynamic?: number;    // PID-modulated w_core (Boltzmann gate)
 }): PhaseResult {
-  const { sigma, prevSigma, k2Final } = params;
+  const { sigma, prevSigma, k2Final, tEntropy, wCoreDynamic } = params;
   const curl = curlSquared(sigma, prevSigma);
-  const state = phaseGate(curl, k2Final);
+
+  let state: PhaseState;
+  let pParticle = 0;
+
+  if (tEntropy !== undefined && wCoreDynamic !== undefined) {
+    // ── Boltzmann probabilistic gate ──
+    const result = boltzmannPhaseGate({ curlSq: curl, k2Final, tEntropy, wCoreDynamic });
+    state     = result.state;
+    pParticle = result.pParticle;
+  } else {
+    // ── Legacy hard-threshold gate (fallback) ──
+    state = phaseGate(curl, k2Final);
+  }
 
   const autoTriggers: AutoTrigger[] = [];
 
@@ -76,7 +95,7 @@ export function stageDecide(params: {
     });
   }
 
-  return { state, curlSq: curl, k2Final, autoTriggers };
+  return { state, curlSq: curl, k2Final, autoTriggers, pParticle };
 }
 
 /**

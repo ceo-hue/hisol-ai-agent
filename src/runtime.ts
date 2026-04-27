@@ -12,7 +12,7 @@ import type { ARHAState } from './core/execution/state.js';
 import type { ResonanceState } from './core/cognition/resonance.js';
 import type { TurnOutput } from './core/execution/turn-cycle.js';
 import type { OutRenderSpec } from './core/cognition/sensor-out.js';
-import type { PersonaDefinition } from './core/identity/persona.js';
+import type { PersonaDefinition, ValueChain, V1Sub } from './core/identity/persona.js';
 
 import { bootstrap } from './core/execution/bootstrap.js';
 import { executeTurn } from './core/execution/turn-cycle.js';
@@ -57,16 +57,23 @@ export interface ARHAProcessOutput {
   qualityGrade: QualityGrade;
   // Exposed ARHA state fields for Claude tool consumers
   arhaState: {
-    turn: number;
-    C: number | null;
-    Gamma: number | null;
-    engine: string;
-    k2Final: number;
-    phase: string;
-    waveCount: number;
+    turn:         number;
+    C:            number | null;
+    Gamma:        number | null;
+    engine:       string;
+    k2Final:      number;
+    phase:        string;
+    waveCount:    number;
     psiResonance: number;
-    g: number;
-    p: number;
+    g:            number;
+    p:            number;
+    // PID + Boltzmann
+    wCoreDynamic: number;
+    tEntropy:     number;
+    tEffective:   number;
+    pParticle:    number;
+    // Self-Evolution
+    evolutionCount: number;
   };
   // Vol.F/G metadata
   volF: MetaSkillPipelineState | null;
@@ -112,6 +119,8 @@ export class ARHARuntime {
   private snapshots: StateSnapshot[] = [];
   private activeSessionId: string | null = null;
   private volFState: MetaSkillPipelineState | null = null;
+  // Self-Evolution Circuit — mutable live value chain (deep-copy of boot-time chain)
+  private liveValueChain: ValueChain | null = null;
 
   constructor(personaId = 'HighSol', sessionId?: string) {
     this.personaId = personaId;
@@ -133,6 +142,9 @@ export class ARHARuntime {
 
     // Vol.F — init MetaSkill pipeline state if applicable
     this.volFState = initMetaSkillState(persona, skills);
+
+    // Self-Evolution — deep-copy of boot-time value chain (mutable during session)
+    this.liveValueChain = JSON.parse(JSON.stringify(persona.valueChain)) as ValueChain;
 
     // Π persistence — restore resonance + history + snapshots from previous session
     if (sessionId) {
@@ -171,11 +183,17 @@ export class ARHARuntime {
       { text: input.text, turnNumber: this.turnCount },
       persona,
       this.state,
-      this.resonance
+      this.resonance,
+      this.liveValueChain ?? undefined,   // Self-Evolution: pass evolved chain
     );
 
     this.state     = turnOutput.state;
     this.resonance = turnOutput.resonance;
+
+    // Self-Evolution Circuit — trigger V1_sub mutation on sigma_eureka
+    if (turnOutput.sigmaEureka && this.liveValueChain && this.state.sigma) {
+      this.evolveValueChain(this.state, persona);
+    }
 
     // Skill dispatch
     const phase = turnOutput.state.phase;
@@ -273,6 +291,11 @@ export class ARHARuntime {
         psiResonance: this.state.psiResonance,
         g:            this.state.g,
         p:            this.state.p,
+        wCoreDynamic:   this.state.wCoreDynamic,
+        tEntropy:       this.state.tEntropy,
+        tEffective:     this.state.tEffective,
+        pParticle:      this.state.pParticle,
+        evolutionCount: this.state.evolutionCount,
       },
       volF:      this.volFState,
       volGLayer: persona.volGLayerType ?? null,
@@ -402,6 +425,9 @@ export class ARHARuntime {
       '[Vol.D — RUNTIME STATE]',
       result.stateBlock,
       `Phase: ${result.phaseLabel} | Engine: ${s.engine} | Grade: ${result.qualityGrade}`,
+      `w_dyn: ${s.wCoreDynamic.toFixed(3)} | w_sub: [${s.wSubsDynamic.map(w => w.toFixed(3)).join(', ')}]`,
+      `T: ${s.tEntropy.toFixed(3)} | T_eff: ${s.tEffective === 0 ? '🔒0.000 (V1_LOCK)' : s.tEffective.toFixed(3)} | P(💎): ${(s.pParticle * 100).toFixed(1)}%`,
+      s.evolutionCount > 0 ? `V1_sub evolved: ${s.evolutionCount}× | live subs: ${this.liveValueChain?.subs.length ?? '?'}` : null,
       bondLine,
       '',
       '[Vol.E — TURN DIRECTIVE]',
@@ -452,8 +478,60 @@ export class ARHARuntime {
     });
   }
 
-  getState():     ARHAState { return this.state; }
-  getPersonaId(): string    { return this.personaId; }
-  getTurnCount(): number    { return this.turnCount; }
-  getResonance(): ResonanceState { return this.resonance; }
+  getState():          ARHAState      { return this.state; }
+  getPersonaId():      string         { return this.personaId; }
+  getTurnCount():      number         { return this.turnCount; }
+  getResonance():      ResonanceState { return this.resonance; }
+  getLiveValueChain(): ValueChain | null { return this.liveValueChain; }
+
+  // ─────────────────────────────────────────
+  // SELF-EVOLUTION CIRCUIT
+  // ─────────────────────────────────────────
+
+  /**
+   * Evolve the live value chain on sigma_eureka.
+   *
+   * Creates a new V1_sub node from the crystallised sigma insight:
+   *   n     = last_sub.n + 1
+   *   gamma = min_gamma × 0.70   (strictly lower than any existing sub → ordering preserved)
+   *   alpha = 0.60 + C × 0.25   (coherence at crystallisation = alignment quality)
+   *   beta  = w_core_dynamic     (interpretation specificity = current flexibility)
+   *
+   * After appending, PATCH_B softmax automatically redistributes energy
+   * on the next turn — no manual gamma renormalisation needed.
+   */
+  private evolveValueChain(state: ARHAState, persona: PersonaDefinition): void {
+    if (!this.liveValueChain) return;
+
+    const subs    = this.liveValueChain.subs;
+    const gammas  = subs.map(s => s.gamma);
+    const minGamma = gammas.length > 0 ? Math.min(...gammas) : 0.30;
+    const newGamma = Math.max(0.01, minGamma * 0.70);   // strictly smaller
+
+    const newSub: V1Sub = {
+      n:           (subs.at(-1)?.n ?? 0) + 1,
+      declaration: `Evolved insight [turn ${state.turn}] — sigma crystallisation after sustained tension`,
+      alpha:       Math.min(0.95, 0.60 + (state.C ?? 0.65) * 0.25),
+      beta:        state.wCoreDynamic,
+      gamma:       newGamma,
+      texture:     this.liveValueChain.core.texture,
+    };
+
+    this.liveValueChain = {
+      ...this.liveValueChain,
+      subs: [...subs, newSub],
+    };
+
+    // Increment evolution counter in state (post-turn side-effect)
+    this.state = {
+      ...this.state,
+      evolutionCount: this.state.evolutionCount + 1,
+    };
+
+    console.log(
+      `[ARHA Self-Evolution] Turn ${state.turn}: V1_sub[${newSub.n}] created ` +
+      `(γ=${newGamma.toFixed(3)} α=${newSub.alpha.toFixed(3)}) — ` +
+      `total subs: ${this.liveValueChain.subs.length}`
+    );
+  }
 }

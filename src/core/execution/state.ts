@@ -32,6 +32,15 @@ export interface ARHAState {
   tau: number;            // τ current
   psiDiss: boolean;       // decoherence flag
   waveCount: number;      // consecutive Wave cycles
+  // PID + Boltzmann (Gemini Chip Circuit — PART_2 & PART_3)
+  wCoreDynamic:  number;    // PID-modulated w_core this turn
+  wSubsDynamic:  number[];  // PATCH_B: softmax-normalized sub-weights (energy-conserved)
+  tEntropy:      number;    // raw contextual entropy temperature T
+  tEffective:    number;    // PATCH_A: T after Absolute Zero guard (0 when V1_check fires)
+  pParticle:     number;    // Boltzmann P(Particle) probability [0,1]
+  // Self-Evolution Circuit
+  sustainedHighGamma: number;  // consecutive turns with Γ > 0.6 (sigma_eureka prerequisite)
+  evolutionCount:     number;  // total V1_sub evolution events this session
 }
 
 // ─────────────────────────────────────────
@@ -39,12 +48,13 @@ export interface ARHAState {
 // ─────────────────────────────────────────
 
 export function initState(params: {
-  k2Persona: number;
-  g: number;
-  p: number;
-  rho: number;
-  lam: number;
-  tau: number;
+  k2Persona:    number;
+  g:            number;
+  p:            number;
+  rho:          number;
+  lam:          number;
+  tau:          number;
+  wCoreStatic?: number;  // boot-time w_core for PID baseline
 }): ARHAState {
   return {
     turn: 0,
@@ -66,6 +76,13 @@ export function initState(params: {
     tau: params.tau,
     psiDiss: false,
     waveCount: 0,
+    wCoreDynamic:       params.wCoreStatic ?? 0.55,
+    wSubsDynamic:       [],
+    tEntropy:           0.40,
+    tEffective:         0.40,
+    pParticle:          0.0,
+    sustainedHighGamma: 0,
+    evolutionCount:     0,
   };
 }
 
@@ -118,8 +135,15 @@ export function serializeState(s: ARHAState): string {
     `g:${s.g.toFixed(2)}`,
     `p:${s.p.toFixed(2)}`,
     `ρλτ:(${s.rho.toFixed(2)},${s.lam.toFixed(2)},${s.tau.toFixed(2)})`,
+    `w_dyn:${s.wCoreDynamic.toFixed(3)}`,
+    `w_sub:[${s.wSubsDynamic.map(w => w.toFixed(3)).join(',')}]`,
+    `T:${s.tEntropy.toFixed(3)}`,
+    // Show T_eff only when it differs from T (V1_check lockdown visible)
+    s.tEffective !== s.tEntropy ? `T_eff:🔒${s.tEffective.toFixed(3)}` : `T_eff:${s.tEffective.toFixed(3)}`,
+    `P(💎):${(s.pParticle * 100).toFixed(1)}%`,
+    s.evolutionCount > 0 ? `σ_evol:${s.evolutionCount}` : null,
     `}`,
-  ].join(' ');
+  ].filter(Boolean).join(' ');
 }
 
 // ─────────────────────────────────────────
