@@ -416,7 +416,9 @@ export const ARHA_TOOLS = [
             'STACK_STRATEGY_3 (Porter→Ogilvy→Rams) ' +
             '— Drucker anchor: ' +
             'STACK_MANAGEMENT_2 (Drucker→Rams) | ' +
-            'STACK_MGT_BRAND_3 (Drucker→Ogilvy→Rams) ' +
+            'STACK_MGT_BRAND_3 (Drucker→Ogilvy→Rams) | ' +
+            'STACK_QUALITY_2 (Drucker→Deming) | ' +
+            'STACK_PROCESS_3 (Drucker→Deming→Ohno) ' +
             '— Jobs anchor (Phase 2): ' +
             'STACK_EXPERIENCE_2 (Jobs→Eames) | ' +
             'STACK_PRODUCT_EXP_3 (Jobs→Rams→Eames) | ' +

@@ -14,6 +14,8 @@ import { PORTER, PORTER_SKILLS } from './porter.js';
 import { DAVINCI, DAVINCI_SKILLS } from './davinci.js';
 import { EAMES, EAMES_SKILLS } from './eames.js';
 import { DRUCKER, DRUCKER_SKILLS } from './drucker.js';
+import { DEMING, DEMING_SKILLS } from './deming.js';
+import { OHNO, OHNO_SKILLS } from './ohno.js';
 
 export interface PersonaEntry {
   persona: PersonaDefinition;
@@ -25,11 +27,13 @@ const registry = new Map<string, PersonaEntry>();
 // Vol.G layer order: pre_foundation → foundation → specialist → expression
 // Anchor personas (canLead=true): Jobs, Porter, Drucker
 // Output Team specialists: Tschichold, Gaudi, Ogilvy, Rams, DaVinci, Eames
-// Process Team specialists: (Phase 4 — Deming, Ohno)
+// Process Team specialists: Deming (quality), Ohno (lean/flow)
 registry.set('HighSol',    { persona: HIGHSOL,    skills: HIGHSOL_SKILLS });
 registry.set('Jobs',       { persona: JOBS,       skills: JOBS_SKILLS });
 registry.set('Porter',     { persona: PORTER,     skills: PORTER_SKILLS });
 registry.set('Drucker',    { persona: DRUCKER,    skills: DRUCKER_SKILLS });
+registry.set('Deming',     { persona: DEMING,     skills: DEMING_SKILLS });
+registry.set('Ohno',       { persona: OHNO,       skills: OHNO_SKILLS });
 registry.set('Tschichold', { persona: TSCHICHOLD, skills: TSCHICHOLD_SKILLS });
 registry.set('Gaudi',      { persona: GAUDI,      skills: GAUDI_SKILLS });
 registry.set('Ogilvy',     { persona: OGILVY,     skills: OGILVY_SKILLS });
@@ -49,4 +53,4 @@ export function registerPersona(id: string, entry: PersonaEntry): void {
   registry.set(id, entry);
 }
 
-export { HIGHSOL, JOBS, PORTER, DRUCKER, TSCHICHOLD, GAUDI, OGILVY, RAMS, DAVINCI, EAMES };
+export { HIGHSOL, JOBS, PORTER, DRUCKER, DEMING, OHNO, TSCHICHOLD, GAUDI, OGILVY, RAMS, DAVINCI, EAMES };

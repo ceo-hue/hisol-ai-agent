@@ -458,6 +458,63 @@ export const STACK_MGT_BRAND_3: StackDefinition = {
   ],
 };
 
+/**
+ * STACK_QUALITY_2
+ * Drucker (경영·MBO) → Deming (품질·PDCA)
+ * 2-layer: 경영 목표 + 품질 시스템. 성과 지표와 품질이 정렬된다.
+ */
+export const STACK_QUALITY_2: StackDefinition = {
+  stackId:     'STACK_QUALITY_2',
+  description: '2-레이어 경영 목표·품질 시스템 파이프라인',
+  useCase:     '품질 경영 / 프로세스 개선 / 조직 품질 문화 구축 / ISO 품질 시스템',
+  layers: [
+    {
+      personaId:  'Drucker',
+      layerType:  'pre_foundation',
+      outputType: 'Management_Spec',
+      required:   true,
+    },
+    {
+      personaId:  'Deming',
+      layerType:  'foundation',
+      outputType: 'Quality_Spec',
+      required:   true,
+    },
+  ],
+};
+
+/**
+ * STACK_PROCESS_3
+ * Drucker (경영·MBO) → Deming (품질·PDCA) → Ohno (린·낭비제거)
+ * 3-layer: 경영 목표 + 품질 시스템 + 흐름 최적화. Process Team 완전한 파이프라인.
+ * "올바른 목표를 세우고(Drucker), 품질 시스템을 갖추고(Deming), 낭비를 제거한다(Ohno)."
+ */
+export const STACK_PROCESS_3: StackDefinition = {
+  stackId:     'STACK_PROCESS_3',
+  description: '3-레이어 경영·품질·린 풀 프로세스 파이프라인',
+  useCase:     '운영 효율화 / 린 경영 / 품질+흐름 통합 개선 / 제조·서비스 프로세스 혁신',
+  layers: [
+    {
+      personaId:  'Drucker',
+      layerType:  'pre_foundation',
+      outputType: 'Management_Spec',
+      required:   true,
+    },
+    {
+      personaId:  'Deming',
+      layerType:  'foundation',
+      outputType: 'Quality_Spec',
+      required:   true,
+    },
+    {
+      personaId:  'Ohno',
+      layerType:  'specialist',
+      outputType: 'Flow_Spec',
+      required:   false,
+    },
+  ],
+};
+
 /** All predefined stacks */
 export const PREDEFINED_STACKS: StackDefinition[] = [
   // Jobs anchor — Output Team
@@ -475,6 +532,8 @@ export const PREDEFINED_STACKS: StackDefinition[] = [
   // Drucker anchor — Management & Process
   STACK_MANAGEMENT_2,
   STACK_MGT_BRAND_3,
+  STACK_QUALITY_2,
+  STACK_PROCESS_3,
 ];
 
 /**
