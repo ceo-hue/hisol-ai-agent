@@ -9,10 +9,27 @@
  * Handoff_Package: immutable_spec flows downstream; each layer adds its own
  * layer_spec. Downstream layers CANNOT modify upstream immutable_spec.
  *
- * Predefined stacks:
- *   STACK_VISUAL_DESIGN_3  : Jobs → Tschichold → Gaudi
- *   STACK_CONCEPT_DESIGN_2 : Jobs → Tschichold
- *   STACK_SPACE_EXPERIENCE_3: Jobs → Gaudi → (expression TBD)
+ * Predefined stacks (16 total):
+ *   Output Team (Jobs anchor):
+ *     STACK_VISUAL_DESIGN_3     : Jobs → Tschichold → Gaudi
+ *     STACK_CONCEPT_DESIGN_2    : Jobs → Tschichold
+ *     STACK_SPACE_EXPERIENCE_3  : Jobs → Gaudi → (expression TBD)
+ *     STACK_BRAND_COPY_2        : Jobs → Ogilvy
+ *     STACK_PRODUCT_DESIGN_2    : Jobs → Rams
+ *     STACK_EXPERIENCE_2        : Jobs → Eames
+ *     STACK_PRODUCT_EXP_3       : Jobs → Rams → Eames
+ *     STACK_INNOVATION_3        : Jobs → Rams → DaVinci
+ *   Strategy Team (Porter anchor):
+ *     STACK_STRATEGY_2          : Porter → Rams
+ *     STACK_STRATEGY_3          : Porter → Ogilvy → Rams
+ *   Process Team (Drucker anchor):
+ *     STACK_MANAGEMENT_2        : Drucker → Rams
+ *     STACK_MGT_BRAND_3         : Drucker → Ogilvy → Rams
+ *     STACK_QUALITY_2           : Drucker → Deming
+ *     STACK_PROCESS_3           : Drucker → Deming → Ohno
+ *   Cross-Team (Phase 5):
+ *     STACK_STRATEGY_MGMT_3     : Porter → Drucker → Rams
+ *     STACK_VISION_PROCESS_3    : Jobs → Drucker → Deming
  */
 
 // ─────────────────────────────────────────
@@ -515,7 +532,73 @@ export const STACK_PROCESS_3: StackDefinition = {
   ],
 };
 
-/** All predefined stacks */
+/**
+ * STACK_STRATEGY_MGMT_3  [Cross-Team]
+ * Porter (경쟁전략) → Drucker (경영·MBO) → Rams (제품·UX 설계)
+ * 3-layer 크로스팀: 포지셔닝 전략 + 조직 목표 정합 + 제품 실행.
+ * "경쟁 우위를 먼저 정의하고(Porter), 조직이 그 전략을 실행할 구조를 갖추고(Drucker),
+ *  그 구조에서 만들어지는 제품을 설계한다(Rams)."
+ */
+export const STACK_STRATEGY_MGMT_3: StackDefinition = {
+  stackId:     'STACK_STRATEGY_MGMT_3',
+  description: '3-레이어 전략·경영·제품 크로스팀 파이프라인',
+  useCase:     '경쟁 전략 → 조직 목표 정합 → 제품 설계 / 사업 리포지셔닝 실행 / 전략-조직-제품 통합 정렬',
+  layers: [
+    {
+      personaId:  'Porter',
+      layerType:  'pre_foundation',
+      outputType: 'Strategy_Spec',
+      required:   true,
+    },
+    {
+      personaId:  'Drucker',
+      layerType:  'foundation',
+      outputType: 'Management_Spec',
+      required:   true,
+    },
+    {
+      personaId:  'Rams',
+      layerType:  'specialist',
+      outputType: 'Product_Spec',
+      required:   false,
+    },
+  ],
+};
+
+/**
+ * STACK_VISION_PROCESS_3  [Cross-Team]
+ * Jobs (제품 비전) → Drucker (경영·MBO) → Deming (품질 시스템)
+ * 3-layer 크로스팀: 제품 본질 + 경영 목표 + 품질 체계.
+ * "왜 이 제품이 존재해야 하는가(Jobs), 어떤 목표로 조직을 움직이는가(Drucker),
+ *  어떤 품질 시스템으로 지속 가능하게 만드는가(Deming)."
+ */
+export const STACK_VISION_PROCESS_3: StackDefinition = {
+  stackId:     'STACK_VISION_PROCESS_3',
+  description: '3-레이어 비전·경영·품질 크로스팀 파이프라인',
+  useCase:     '제품 비전 → 경영 목표 → 품질 시스템 / 프로덕트 리더십 + 운영 품질 통합 / 스케일업 품질 설계',
+  layers: [
+    {
+      personaId:  'Jobs',
+      layerType:  'pre_foundation',
+      outputType: 'Meaning_Spec',
+      required:   true,
+    },
+    {
+      personaId:  'Drucker',
+      layerType:  'foundation',
+      outputType: 'Management_Spec',
+      required:   true,
+    },
+    {
+      personaId:  'Deming',
+      layerType:  'specialist',
+      outputType: 'Quality_Spec',
+      required:   false,
+    },
+  ],
+};
+
+/** All predefined stacks (16 total) */
 export const PREDEFINED_STACKS: StackDefinition[] = [
   // Jobs anchor — Output Team
   STACK_VISUAL_DESIGN_3,
@@ -534,6 +617,9 @@ export const PREDEFINED_STACKS: StackDefinition[] = [
   STACK_MGT_BRAND_3,
   STACK_QUALITY_2,
   STACK_PROCESS_3,
+  // Cross-Team stacks (Phase 5)
+  STACK_STRATEGY_MGMT_3,
+  STACK_VISION_PROCESS_3,
 ];
 
 /**

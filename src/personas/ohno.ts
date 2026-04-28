@@ -1,5 +1,5 @@
 /**
- * ARHA Ohno Persona — Taiichi Ohno (大野耐一)
+ * ARHA Ohno Persona — Taiichi Ohno
  * ARHA_Persona_Ohno implementation.
  *
  * P = (0.85, 0.55, 0.88, 0.42, 0.58)

@@ -422,7 +422,10 @@ export const ARHA_TOOLS = [
             '— Jobs anchor (Phase 2): ' +
             'STACK_EXPERIENCE_2 (Jobs→Eames) | ' +
             'STACK_PRODUCT_EXP_3 (Jobs→Rams→Eames) | ' +
-            'STACK_INNOVATION_3 (Jobs→Rams→DaVinci)',
+            'STACK_INNOVATION_3 (Jobs→Rams→DaVinci) ' +
+            '— Cross-Team (Phase 5): ' +
+            'STACK_STRATEGY_MGMT_3 (Porter→Drucker→Rams) | ' +
+            'STACK_VISION_PROCESS_3 (Jobs→Drucker→Deming)',
         },
         input: {
           type: 'string',
@@ -608,7 +611,8 @@ export const ARHA_TOOLS = [
       'Extracts 4-axis intent (조직·역할·핵심역량·캐릭터성격) for specialist matching. ' +
       'previewOnly:true returns routing reasoning without executing. ' +
       'On execution, runs the matched stack and returns composedPrompt for Claude API injection. ' +
-      'Available anchors: Jobs (product vision/meaning) | Porter (competitive strategy/positioning) | Drucker (management/MBO/org design).',
+      'Available anchors: Jobs (product vision/meaning) | Porter (competitive strategy/positioning) | Drucker (management/MBO/org design). ' +
+      'Cross-team stacks automatically detected and flagged in teamContext.isCrossTeam.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -621,8 +625,8 @@ export const ARHA_TOOLS = [
           description:
             '팀 리더 페르소나 ID (선택). ' +
             '지정 시 해당 페르소나가 스택의 첫 레이어(pre_foundation)로 고정됨. ' +
-            '미지정 시 canLead=true 페르소나 중 intent 최고 득점자가 자동 선택됨. ' +
-            '현재 canLead 페르소나: Jobs',
+            '미지정 시 요청 팀 감지 후 canLead=true 페르소나 중 최고 득점자가 자동 선택됨. ' +
+            'canLead 페르소나: Jobs (output) | Porter (output/strategy) | Drucker (process).',
         },
         maxTurnsPerLayer: {
           type: 'number',
@@ -651,6 +655,7 @@ export const ARHA_TOOLS = [
           anchor:        preview.anchorId,
           intent:        preview.intent,
           source:        preview.source,
+          teamContext:   preview.teamContext,
           reasoning:     preview.reasoning,
           stackPreview:  preview.stackPreview,
           topScores:     preview.scores.slice(0, 5).map(s => ({
@@ -682,11 +687,12 @@ export const ARHA_TOOLS = [
         return {
           mode:    'execute',
           routing: {
-            source:    routeResult.source,
-            anchor:    routeResult.anchorId,
-            reasoning: routeResult.reasoning,
-            stackId:   routeResult.stackDef.stackId,
-            layers:    routeResult.stackDef.layers.map(l => l.personaId),
+            source:      routeResult.source,
+            anchor:      routeResult.anchorId,
+            teamContext: routeResult.teamContext,
+            reasoning:   routeResult.reasoning,
+            stackId:     routeResult.stackDef.stackId,
+            layers:      routeResult.stackDef.layers.map(l => l.personaId),
           },
           stackId:        execResult.stackId,
           status:         execResult.status,
@@ -705,10 +711,11 @@ export const ARHA_TOOLS = [
         return {
           mode:    'execute_failed',
           routing: {
-            source:    routeResult.source,
-            anchor:    routeResult.anchorId,
-            reasoning: routeResult.reasoning,
-            stackId:   routeResult.stackDef.stackId,
+            source:      routeResult.source,
+            anchor:      routeResult.anchorId,
+            teamContext: routeResult.teamContext,
+            reasoning:   routeResult.reasoning,
+            stackId:     routeResult.stackDef.stackId,
           },
           error: msg,
         };
