@@ -414,6 +414,9 @@ export const ARHA_TOOLS = [
             '— Porter anchor: ' +
             'STACK_STRATEGY_2 (Porter→Rams) | ' +
             'STACK_STRATEGY_3 (Porter→Ogilvy→Rams) ' +
+            '— Drucker anchor: ' +
+            'STACK_MANAGEMENT_2 (Drucker→Rams) | ' +
+            'STACK_MGT_BRAND_3 (Drucker→Ogilvy→Rams) ' +
             '— Jobs anchor (Phase 2): ' +
             'STACK_EXPERIENCE_2 (Jobs→Eames) | ' +
             'STACK_PRODUCT_EXP_3 (Jobs→Rams→Eames) | ' +
@@ -603,8 +606,7 @@ export const ARHA_TOOLS = [
       'Extracts 4-axis intent (조직·역할·핵심역량·캐릭터성격) for specialist matching. ' +
       'previewOnly:true returns routing reasoning without executing. ' +
       'On execution, runs the matched stack and returns composedPrompt for Claude API injection. ' +
-      'Available anchors: Jobs (product vision/meaning) | Porter (competitive strategy/positioning). ' +
-      'More canLead personas will be added in later phases.',
+      'Available anchors: Jobs (product vision/meaning) | Porter (competitive strategy/positioning) | Drucker (management/MBO/org design).',
     inputSchema: {
       type: 'object',
       properties: {

@@ -400,9 +400,67 @@ export const STACK_INNOVATION_3: StackDefinition = {
   ],
 };
 
+/**
+ * STACK_MANAGEMENT_2
+ * Drucker (경영 목적·MBO) → Rams (제품·UX 설계)
+ * 2-layer: 경영 목표 설정 + 제품 기능 설계.
+ * "올바른 결과를 정의하고, 그 결과를 만드는 제품을 설계한다."
+ */
+export const STACK_MANAGEMENT_2: StackDefinition = {
+  stackId:     'STACK_MANAGEMENT_2',
+  description: '2-레이어 경영 목표·제품 설계 파이프라인',
+  useCase:     '사업 목표 설정 / 제품 우선순위 결정 / 조직-제품 정합성 / 성과 기반 설계',
+  layers: [
+    {
+      personaId:  'Drucker',
+      layerType:  'pre_foundation',
+      outputType: 'Management_Spec',
+      required:   true,
+    },
+    {
+      personaId:  'Rams',
+      layerType:  'foundation',
+      outputType: 'Product_Spec',
+      required:   true,
+    },
+  ],
+};
+
+/**
+ * STACK_MGT_BRAND_3
+ * Drucker (경영·MBO) → Ogilvy (브랜드 언어) → Rams (제품 설계)
+ * 3-layer: 경영 방향 + 브랜드 메시지 + 제품 완성.
+ * 내부 목표와 외부 언어와 제품이 하나의 라인으로 정렬된다.
+ */
+export const STACK_MGT_BRAND_3: StackDefinition = {
+  stackId:     'STACK_MGT_BRAND_3',
+  description: '3-레이어 경영·브랜드·제품 정합 파이프라인',
+  useCase:     '경영 목표 → 브랜드 메시지 → 제품 설계 전체 정합 / 사업 리포지셔닝',
+  layers: [
+    {
+      personaId:  'Drucker',
+      layerType:  'pre_foundation',
+      outputType: 'Management_Spec',
+      required:   true,
+    },
+    {
+      personaId:  'Ogilvy',
+      layerType:  'foundation',
+      outputType: 'Copy_Spec',
+      required:   false,
+    },
+    {
+      personaId:  'Rams',
+      layerType:  'foundation',
+      outputType: 'Product_Spec',
+      required:   true,
+    },
+  ],
+};
+
 /** All predefined stacks */
 export const PREDEFINED_STACKS: StackDefinition[] = [
-  // Jobs anchor
+  // Jobs anchor — Output Team
   STACK_VISUAL_DESIGN_3,
   STACK_CONCEPT_DESIGN_2,
   STACK_SPACE_EXPERIENCE_3,
@@ -411,9 +469,12 @@ export const PREDEFINED_STACKS: StackDefinition[] = [
   STACK_EXPERIENCE_2,
   STACK_PRODUCT_EXP_3,
   STACK_INNOVATION_3,
-  // Porter anchor
+  // Porter anchor — Competitive Strategy
   STACK_STRATEGY_2,
   STACK_STRATEGY_3,
+  // Drucker anchor — Management & Process
+  STACK_MANAGEMENT_2,
+  STACK_MGT_BRAND_3,
 ];
 
 /**

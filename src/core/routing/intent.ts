@@ -47,10 +47,10 @@ const COMPETENCY_KEYWORDS: Record<CompetencyTag, string[]> = {
   spatial_design:       ['공간', '건축', '인테리어', 'spatial', 'architecture', '설치', '전시', '3d'],
   ux_strategy:          ['ux', '사용자경험', '사용성', 'usability', 'user experience', '사용자 여정', '전환율'],
   visual_system:        ['비주얼', '시각', '디자인 시스템', 'visual system', '컬러', '색상', '색채', '팔레트'],
-  semantics:            ['의미', '본질', '핵심', '철학', 'meaning', 'essence', 'why', '존재', '정체성'],
+  semantics:            ['의미', '본질', '핵심', '철학', 'meaning', 'essence', 'why', '존재', '정체성', '목적', 'purpose', '경영 철학', '조직 목적'],
   storytelling:         ['스토리', '내러티브', '이야기', 'storytelling', '서사', '스크립트', '스토리텔링'],
-  system_design:        ['시스템', '아키텍처', '설계', 'system design', '구조 설계', '인프라', '가치사슬', 'value chain'],
-  data_analysis:        ['데이터', '분석', 'data', 'analysis', '지표', '통계', '리포트', '시장 조사', '산업 분석'],
+  system_design:        ['시스템', '아키텍처', '설계', 'system design', '구조 설계', '인프라', '가치사슬', 'value chain', '조직 설계', 'org design', '경영 시스템', 'management system', '프로세스 설계'],
+  data_analysis:        ['데이터', '분석', 'data', 'analysis', '지표', '통계', '리포트', '시장 조사', '산업 분석', '성과 측정', 'kpi', 'okr', 'mbo', '목표 설정', 'performance'],
   copywriting:          ['카피', '문구', '슬로건', 'copy', 'copywriting', '헤드라인', '광고 문구'],
   product_vision:       ['제품 비전', '방향성', '로드맵', 'product vision', '전략적 방향', '제품 전략', '프로토타입', 'prototype', '혁신', 'innovation', '아이디어 실체화'],
   organic_structure:    ['유기적', '자연', '구조', 'organic', '형태', '패턴', '자연 구조', '생체', '교차 도메인', 'cross domain', '르네상스', 'renaissance'],
@@ -64,6 +64,18 @@ const COMPETENCY_KEYWORDS: Record<CompetencyTag, string[]> = {
     'competitive strategy', 'competitive advantage', 'positioning', 'market analysis',
     'industry analysis', 'generic strategy', 'cost leadership', 'differentiation',
     'strategic positioning', '전략 수립', '경쟁력', 'porter',
+  ],
+  quality_management: [
+    '품질 관리', '품질관리', 'quality management', 'tqm', '전사적 품질',
+    'pdca', 'plan do check act', '품질 개선', '불량률', '표준화', '품질 지표',
+    'six sigma', '식스시그마', '품질 보증', 'qa', 'quality assurance',
+    '통계적 관리', 'spc', 'deming', '데밍',
+  ],
+  process_optimization: [
+    '린', 'lean', '카이젠', 'kaizen', '낭비 제거', '낭비제거', '7가지 낭비',
+    'jit', 'just in time', '적시 생산', '도요타', 'toyota', '생산 효율',
+    '프로세스 최적화', 'process optimization', '흐름 개선', '가치 흐름',
+    'value stream', '낭비', 'muda', '오노', 'ohno', '칸반', 'kanban',
   ],
 };
 
@@ -83,7 +95,7 @@ const PERSONALITY_KEYWORDS: Record<PersonalityTag, string[]> = {
 };
 
 const ROLE_KEYWORDS: Record<RoleType, string[]> = {
-  strategist:  ['전략', '방향', '의미', '철학', 'why', 'strategy', '비전 설정'],
+  strategist:  ['전략', '방향', '의미', '철학', 'why', 'strategy', '비전 설정', '경영', '조직 관리', 'management', '경영 전략', '목표 설정', 'mbo', 'okr'],
   designer:    ['디자인', '시각', 'visual', 'design', '그래픽'],
   architect:   ['건축', '구조', 'architecture', 'structure', '아키텍처'],
   copywriter:  ['카피', '문구', 'copy', 'writing', '언어'],

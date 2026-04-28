@@ -68,7 +68,9 @@ export type CompetencyTag =
   | 'grid_layout'           // 그리드·비례·여백
   | 'emotional_connection'  // 감성 연결·공감
   | 'code_architecture'     // 코드·기술 아키텍처
-  | 'competitive_strategy'; // 경쟁전략·포지셔닝·산업 구조 분석 (Porter)
+  | 'competitive_strategy'  // 경쟁전략·포지셔닝·산업 구조 분석 (Porter)
+  | 'quality_management'   // 품질관리·프로세스 개선·TQM (Deming, Phase 4)
+  | 'process_optimization'; // 린·흐름 최적화·낭비 제거 (Ohno, Phase 4)
 
 // ─────────────────────────────────────────
 // 캐릭터성격 (Personality)
