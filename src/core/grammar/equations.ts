@@ -226,7 +226,7 @@ export function computeK2Persona(protect: number, expand: number): number {
  * Extends the legacy `omegaCore × (1−RTension×0.3)` with:
  *   + Ψ_Res × 0.10  — resonance momentum boosts vs
  *   − Γ     × 0.15  — stress suppresses vs
- *   + ΔB    × 0.05  — session-B trend adds minor momentum
+ *   + ΔB    × 0.30  — session-B momentum (tuned ×6 from v0.1: ±0.003→±0.015 실효 범위)
  *
  * Clamp: [0.10, 0.95] — prevents collapse or ceiling lockout.
  */
@@ -241,19 +241,23 @@ export function computeValueStrengthBridge(params: {
   const raw = omega * (1 - rTension * 0.3)
             + psiRes * 0.10
             - gamma  * 0.15
-            + deltaB * 0.05;
+            + deltaB * 0.30;  // tuned: 0.05 → 0.30
   return Math.min(0.95, Math.max(0.10, raw));
 }
 
 /**
  * Bridge Ψ_Res update rule.
- * Ψ_Res(t) = clamp(Ψ_Res(t−1) + C×0.12 − Γ×0.08, 0, 1.0)
+ * Ψ_Res(t) = clamp(Ψ_Res(t−1) + C×0.06 − Γ×0.04, 0, 1.0)
  *
  * High coherence → accumulate resonance.
  * High stress → dissipate resonance.
+ *
+ * Tuned from v0.1 (0.12/0.08 → 0.06/0.04):
+ *   포화 속도 ~15턴 → ~30턴 (C≈0.75, Γ≈0.3 기준)
+ *   장기 세션에서 점진적 누적이 자연스러워짐.
  */
 export function bridgeUpdatePsiRes(psiRes: number, C: number, gamma: number): number {
-  return Math.min(1.0, Math.max(0, psiRes + C * 0.12 - gamma * 0.08));
+  return Math.min(1.0, Math.max(0, psiRes + C * 0.06 - gamma * 0.04));
 }
 
 /**
