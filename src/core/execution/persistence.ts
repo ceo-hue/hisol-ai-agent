@@ -33,6 +33,7 @@ export interface PersistedSession {
     Bn: number;
     history: number[];
   };
+  /** @deprecated use fullState — kept for backward compat */
   partialState: {
     turn: number;
     psiResonance: number;
@@ -40,9 +41,12 @@ export interface PersistedSession {
     B: number | null;
     waveCount: number;
   };
+  /** Full ARHAState — complete restoration including vsB, Bridge state, PID */
+  fullState?: ARHAState;
   history: ConversationMessage[];   // rolling 10-turn (20 message) window
   snapshots: StateSnapshot[];       // lightweight per-turn state records (last 20)
   savedAt: number;
+  schemaVersion: number;            // bumped on breaking state changes
 }
 
 // ─────────────────────────────────────────
@@ -70,6 +74,8 @@ export function loadPersistedSession(sessionId: string): PersistedSession | null
   }
 }
 
+export const PERSISTENCE_SCHEMA_VERSION = 2;
+
 export function persistSession(
   sessionId: string,
   personaId: string,
@@ -83,12 +89,16 @@ export function persistSession(
     const data: PersistedSession = {
       sessionId,
       personaId,
+      schemaVersion: PERSISTENCE_SCHEMA_VERSION,
       resonance: {
         n: resonance.n,
         value: resonance.value,
         Bn: resonance.Bn,
         history: resonance.history,
       },
+      // fullState — complete restoration (v2+)
+      fullState: { ...state },
+      // partialState — legacy fallback
       partialState: {
         turn: state.turn,
         psiResonance: state.psiResonance,

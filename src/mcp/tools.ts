@@ -22,7 +22,10 @@ import { generateCharacterPersona, listArchetypes } from '../core/companion/gene
 import { registerPersona } from '../personas/registry.js';
 import { formatAboutResponse } from '../core/identity/why.js';
 import { route, previewRoute } from '../core/routing/router.js';
+import { runAgentTurn } from '../core/agent/loop.js';
+import { DEFAULT_HOOKS } from '../core/agent/hooks.js';
 import type { PersonaVector } from '../core/identity/persona.js';
+import Anthropic from '@anthropic-ai/sdk';
 
 // ─────────────────────────────────────────
 // SESSION REGISTRY
@@ -723,7 +726,115 @@ export const ARHA_TOOLS = [
     },
   },
 
-  // ── 11. arha_about (Vol.0 — Identity & Usage Guide) ────────────────────────
+  // ── 11. arha_agent_run (Vol.H — Agent Loop) ─────────────────────────────────
+  {
+    name: 'arha_agent_run',
+    description:
+      'ARHA 에이전트 루프 — 완전 자율 단일 턴 실행. ' +
+      'arha_process → systemPrompt 자동 주입 → Hook 평가 → Claude API 직접 호출 → Π 자동 영속. ' +
+      '기존 arha_process와 달리 Claude 응답까지 포함해서 반환. ' +
+      '세션 재시작 후에도 vsB·Ψ_Res·waveCount 등 전체 상태가 복구됨. ' +
+      '발동된 Hook 목록(hooksFired)으로 자동 개입 내역 확인 가능. ' +
+      'ANTHROPIC_API_KEY 환경변수 필요.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        input: {
+          type:        'string',
+          description: '사용자 입력 텍스트',
+        },
+        sessionId: {
+          type:        'string',
+          description: '세션 ID (없으면 "default"). 동일 ID로 재호출 시 이전 상태 복구.',
+        },
+        personaId: {
+          type:        'string',
+          description: '페르소나 ID (기본: HighSol)',
+          default:     'HighSol',
+        },
+        model: {
+          type:        'string',
+          description: 'Claude 모델 ID (기본: claude-sonnet-4-6)',
+          default:     'claude-sonnet-4-6',
+        },
+        maxTokens: {
+          type:        'number',
+          description: '최대 출력 토큰 수 (기본: 4096)',
+          default:     4096,
+        },
+        enableHooks: {
+          type:        'boolean',
+          description: 'Hook 자동 개입 활성화 여부 (기본: true)',
+          default:     true,
+        },
+      },
+      required: ['input'],
+    },
+    handler: async (args: {
+      input:        string;
+      sessionId?:   string;
+      personaId?:   string;
+      model?:       string;
+      maxTokens?:   number;
+      enableHooks?: boolean;
+    }) => {
+      const sid     = args.sessionId ?? 'default';
+      const runtime = getOrCreateRuntime(sid, args.personaId);
+
+      let anthropic: Anthropic;
+      try {
+        anthropic = new Anthropic({
+          apiKey: process.env.ANTHROPIC_API_KEY ?? process.env.CLAUDE_API_KEY,
+        });
+      } catch {
+        return { error: 'ANTHROPIC_API_KEY not set. Set it in environment to use arha_agent_run.' };
+      }
+
+      try {
+        const result = await runAgentTurn(
+          args.input,
+          {
+            sessionId:   sid,
+            personaId:   args.personaId,
+            model:       args.model,
+            maxTokens:   args.maxTokens,
+            hooks:       (args.enableHooks ?? true) ? DEFAULT_HOOKS : [],
+          },
+          runtime,
+          anthropic,
+        );
+
+        return {
+          response:     result.response,
+          sessionId:    result.sessionId,
+          personaId:    result.personaId,
+          turn:         result.turn,
+          qualityGrade: result.qualityGrade,
+          arhaState: {
+            C:            result.arhaState.C,
+            Gamma:        result.arhaState.Gamma,
+            phase:        result.arhaState.phase,
+            psiResonance: result.arhaState.psiResonance,
+            vsB:          result.arhaState.vsB,
+            g:            result.arhaState.g,
+            p:            result.arhaState.p,
+            waveCount:    result.arhaState.waveCount,
+          },
+          hooksFired:   result.hooksFired,
+          tokens: {
+            input:  result.inputTokens,
+            output: result.outputTokens,
+          },
+          // system prompt는 필요 시 arha_process로 별도 조회
+        };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { error: msg };
+      }
+    },
+  },
+
+  // ── 12. arha_about (Vol.0 — Identity & Usage Guide) ────────────────────────
   {
     name: 'arha_about',
     description:

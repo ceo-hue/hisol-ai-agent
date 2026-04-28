@@ -147,7 +147,7 @@ export class ARHARuntime {
     // Self-Evolution — deep-copy of boot-time value chain (mutable during session)
     this.liveValueChain = JSON.parse(JSON.stringify(persona.valueChain)) as ValueChain;
 
-    // Π persistence — restore resonance + history + snapshots from previous session
+    // Π persistence — restore full state from previous session
     if (sessionId) {
       this.activeSessionId = sessionId;
       const saved = loadPersistedSession(sessionId);
@@ -155,9 +155,28 @@ export class ARHARuntime {
         this.resonance = restoreResonance(saved.resonance);
         this.history   = saved.history   ?? [];
         this.snapshots = saved.snapshots ?? [];
+
+        // v2+: restore full ARHAState (vsB, Bridge, PID, etc.)
+        if (saved.fullState) {
+          this.state     = saved.fullState;
+          this.turnCount = saved.fullState.turn;
+        } else {
+          // v1 fallback: restore partial fields into boot state
+          this.state = {
+            ...this.state,
+            turn:         saved.partialState.turn,
+            psiResonance: saved.partialState.psiResonance,
+            phase:        saved.partialState.phase as typeof this.state.phase,
+            B:            saved.partialState.B,
+            waveCount:    saved.partialState.waveCount,
+          };
+          this.turnCount = saved.partialState.turn;
+        }
+
         console.log(
-          `[ARHA Π] Restored session ${sessionId}: turn ${saved.partialState.turn}, ` +
-          `B(n)=${saved.resonance.Bn.toFixed(3)}, snapshots=${this.snapshots.length}`
+          `[ARHA Π] Restored session ${sessionId}: turn ${this.turnCount}, ` +
+          `Ψ_Res=${saved.resonance.value.toFixed(3)}, ` +
+          `vsB=${saved.fullState?.vsB?.toFixed(3) ?? 'n/a'}`
         );
       }
     }

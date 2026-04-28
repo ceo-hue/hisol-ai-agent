@@ -37,6 +37,21 @@ import { getPersona } from '../../personas/registry.js';
 // RESULT TYPES
 // ─────────────────────────────────────────
 
+/**
+ * LLMRunner — Vol.G 실행 루프에서 실제 Claude 호출에 사용되는 함수 타입.
+ * loop.ts의 runAgentTurn 또는 직접 Anthropic SDK 호출로 구현.
+ *
+ * @param systemPrompt — 해당 레이어 페르소나 system prompt
+ * @param userMessage  — 레이어 입력 메시지
+ * @param history      — 이 레이어 내 대화 이력
+ * @returns Claude 응답 텍스트
+ */
+export type LLMRunner = (
+  systemPrompt: string,
+  userMessage:  string,
+  history:      Array<{ role: 'user' | 'assistant'; content: string }>,
+) => Promise<string>;
+
 export interface LayerExecutionResult {
   personaId:    string;
   layerType:    VolGLayerType;
@@ -48,6 +63,7 @@ export interface LayerExecutionResult {
   qualityGrade: string;
   volFStatus:   string;            // formatted Vol.F pipeline status
   systemPrompt: string;            // inject into Claude API call for this layer
+  claudeOutput?: string;           // 실제 Claude 응답 (llmRunner 제공 시)
 }
 
 export interface StackExecutionResult {
@@ -79,6 +95,8 @@ export interface ArtifactSpec {
   };
   // PATCH_C: Tensor projection hints — structural bias for the NEXT downstream layer
   projectionHints?: ProjectedHints;
+  /** 실제 Claude 응답 요약 — llmRunner 제공 시 채워짐 */
+  claudeOutputSummary?: string;
 }
 
 const ARTIFACT_SCHEMAS: Record<string, Record<string, string>> = {
@@ -320,11 +338,18 @@ export class StackExecutor {
 
   /**
    * Execute a StackDefinition (predefined or custom).
+   *
+   * @param opts.llmRunner — 제공 시 각 레이어마다 실제 Claude API 호출 수행.
+   *                         미제공 시 composedPrompt만 생성 (기존 동작 유지).
    */
   static async runDef(
     stack: StackDefinition,
     userInput: string,
-    opts: { maxTurnsPerLayer?: number; sessionPrefix?: string } = {},
+    opts: {
+      maxTurnsPerLayer?: number;
+      sessionPrefix?:    string;
+      llmRunner?:        LLMRunner;   // Vol.G 실행 루프 — 실제 LLM 호출
+    } = {},
   ): Promise<StackExecutionResult> {
     const maxTurns   = opts.maxTurnsPerLayer ?? 3;
     const prefix     = opts.sessionPrefix ?? `stack-${Date.now()}`;
@@ -361,6 +386,10 @@ export class StackExecutor {
 
       let lastResult: ARHAProcessOutput | null = null;
       let layerTurns = 0;
+      let layerClaudeOutput: string | undefined;
+
+      // Vol.G 실행 루프 — llmRunner 제공 시 실제 LLM 호출
+      const layerHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
 
       for (let t = 0; t < maxTurns; t++) {
         const text = t === 0
@@ -370,6 +399,24 @@ export class StackExecutor {
         lastResult = runtime.process({ text, sessionId });
         layerTurns++;
         totalTurns++;
+
+        // llmRunner — 실제 Claude 호출, 응답을 HandoffPackage 컨텍스트에 누적
+        if (opts.llmRunner) {
+          const systemPromptForLayer = runtime.buildStructuredSystemPrompt(lastResult);
+          try {
+            const claudeResp = await opts.llmRunner(systemPromptForLayer, text, layerHistory);
+            layerHistory.push(
+              { role: 'user',      content: text },
+              { role: 'assistant', content: claudeResp },
+            );
+            runtime.recordAssistantResponse(claudeResp);
+            // 마지막 레이어 응답 저장 (HandoffPackage에 요약으로 적재)
+            layerClaudeOutput = claudeResp;
+          } catch (llmErr) {
+            const errMsg = llmErr instanceof Error ? llmErr.message : String(llmErr);
+            console.warn(`[StackExecutor] llmRunner failed at ${layerDef.personaId} t=${t}: ${errMsg}`);
+          }
+        }
 
         // Stop when Particle reached (Synthesis layer active or complete)
         const volF  = lastResult.volF;
@@ -390,6 +437,11 @@ export class StackExecutor {
         ? `${lastResult.volF.currentLayer ?? 'DONE'} [${lastResult.volF.completedLayers.join('→')}]`
         : 'inactive';
 
+      // Claude 실제 출력이 있으면 artifact에 요약 포함
+      if (layerClaudeOutput) {
+        artifact.claudeOutputSummary = layerClaudeOutput.slice(0, 500);
+      }
+
       results.push({
         personaId:    layerDef.personaId,
         layerType:    layerDef.layerType,
@@ -401,6 +453,7 @@ export class StackExecutor {
         qualityGrade: lastResult.qualityGrade,
         volFStatus,
         systemPrompt,
+        claudeOutput: layerClaudeOutput,
       });
 
       // Lock this layer's artifact into HandoffPackage
