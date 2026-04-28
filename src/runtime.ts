@@ -211,6 +211,7 @@ export class ARHARuntime {
           k2Final: this.state.k2Final,
           activeSub: null,
           RTension: 0,
+          vsB: this.state.vsB,
           g: this.state.g,
           p: this.state.p,
           psiDiss: this.state.psiDiss,

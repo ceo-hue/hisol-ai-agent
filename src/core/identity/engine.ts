@@ -6,7 +6,7 @@
 import type { PersonaVector, ValueChain, V1Sub } from './persona.js';
 import type { Sigma } from '../grammar/morphemes.js';
 import type { DominantEngine } from '../grammar/morphemes.js';
-import { chainV2, computeValueStrength } from '../grammar/equations.js';
+import { computeValueStrengthBridge, bridgeUpdateVsB } from '../grammar/equations.js';
 import { cosineSim, innerProduct } from '../grammar/operators.js';
 
 export interface ChainResult {
@@ -19,6 +19,7 @@ export interface ChainResult {
   k2Final: number;
   activeSub: V1Sub | null;
   RTension: number;
+  vsB: number;    // Bridge B(t) — session momentum after this turn's update
   g: number;
   p: number;
   psiDiss: boolean; // decoherence flag
@@ -44,6 +45,8 @@ export function stageChain(params: {
   vinCoords: [number, number, number];
   velocity: number;
   k2Persona: number;
+  prevPsiRes: number;  // Bridge: Ψ_Res(t−1)
+  prevVsB:   number;   // Bridge: B(t−1) session momentum
 }): ChainResult {
   const { P, valueChain, sigma, vinCoords, velocity, k2Persona } = params;
 
@@ -109,8 +112,19 @@ export function stageChain(params: {
     // Reduce highest-tension sub influence (modeled as tension increase → protection)
   }
 
-  // g, p from value_strength
-  const valueStrength = valueChain.core.omega * (1 - RTension * 0.3);
+  // Bridge B(t) update — using this turn's C and Γ
+  const vsB    = bridgeUpdateVsB(params.prevVsB, C, Gamma);
+  const deltaB = vsB - params.prevVsB;
+
+  // Bridge vs(t+1) — value_strength with full emotional dynamics
+  const valueStrength = computeValueStrengthBridge({
+    omega:    valueChain.core.omega,
+    rTension: RTension,
+    psiRes:   params.prevPsiRes,
+    gamma:    Gamma,
+    deltaB,
+  });
+
   const g = valueStrength * P.expand;
   const p = (1 - valueStrength) * P.protect;
 
@@ -124,6 +138,7 @@ export function stageChain(params: {
     k2Final,
     activeSub,
     RTension,
+    vsB,
     g,
     p,
     psiDiss,

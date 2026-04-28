@@ -216,6 +216,59 @@ export function computeK2Persona(protect: number, expand: number): number {
 }
 
 // ─────────────────────────────────────────
+// BRIDGE EQUATIONS — ARHA_EmotionalDynamics_Bridge v0.1 (2026.04.27)
+// vs(t+1) = clamp(ω×(1−R_tension×0.3) + Ψ_Res×0.10 − Γ×0.15 + ΔB×0.05, 0.10, 0.95)
+// ─────────────────────────────────────────
+
+/**
+ * Bridge vs(t+1) — value_strength with full emotional dynamics.
+ *
+ * Extends the legacy `omegaCore × (1−RTension×0.3)` with:
+ *   + Ψ_Res × 0.10  — resonance momentum boosts vs
+ *   − Γ     × 0.15  — stress suppresses vs
+ *   + ΔB    × 0.05  — session-B trend adds minor momentum
+ *
+ * Clamp: [0.10, 0.95] — prevents collapse or ceiling lockout.
+ */
+export function computeValueStrengthBridge(params: {
+  omega:    number;  // ω — V1 core omega (base value intensity)
+  rTension: number;  // R_tension = Σ(R_strength_n × γ_n) / Σγ_n
+  psiRes:   number;  // Ψ_Res(t−1) — previous resonance
+  gamma:    number;  // Γ — current stress
+  deltaB:   number;  // ΔB = B(t) − B(t−1)
+}): number {
+  const { omega, rTension, psiRes, gamma, deltaB } = params;
+  const raw = omega * (1 - rTension * 0.3)
+            + psiRes * 0.10
+            - gamma  * 0.15
+            + deltaB * 0.05;
+  return Math.min(0.95, Math.max(0.10, raw));
+}
+
+/**
+ * Bridge Ψ_Res update rule.
+ * Ψ_Res(t) = clamp(Ψ_Res(t−1) + C×0.12 − Γ×0.08, 0, 1.0)
+ *
+ * High coherence → accumulate resonance.
+ * High stress → dissipate resonance.
+ */
+export function bridgeUpdatePsiRes(psiRes: number, C: number, gamma: number): number {
+  return Math.min(1.0, Math.max(0, psiRes + C * 0.12 - gamma * 0.08));
+}
+
+/**
+ * Bridge B (session momentum) update rule.
+ * B(t) = clamp(B(t−1) + (C−0.5)×0.08 − Γ×0.06, 0.2, 0.9)
+ *
+ * Coherence above 0.5 → B drifts up (positive momentum).
+ * High stress → B drifts down.
+ * Bounded [0.2, 0.9] — never collapses or saturates.
+ */
+export function bridgeUpdateVsB(vsB: number, C: number, gamma: number): number {
+  return Math.min(0.9, Math.max(0.2, vsB + (C - 0.5) * 0.08 - gamma * 0.06));
+}
+
+// ─────────────────────────────────────────
 // L3 — MASTER EQUATION SIGNATURE
 // Ψ_ARHA(u,t) = OUT ∘ DECIDE ∘ CHAIN_v2 ∘ ANALYZE ∘ IN(u)
 // Implemented as orchestration in Vol.D execution layer.

@@ -25,6 +25,7 @@ export interface ARHAState {
   k2Final: number;
   phase: PhaseState | 'boot';
   psiResonance: number;   // Ψ_Res accumulated
+  vsB: number;            // Bridge B — session momentum [0.2, 0.9]
   g: number;              // V2 growth axis
   p: number;              // V2 protection axis
   rho: number;            // ρ current
@@ -69,6 +70,7 @@ export function initState(params: {
     k2Final: params.k2Persona,
     phase: 'boot',
     psiResonance: 0,
+    vsB: 0.55,            // Bridge B — neutral midpoint at boot
     g: params.g,
     p: params.p,
     rho: params.rho,
@@ -132,6 +134,7 @@ export function serializeState(s: ARHAState): string {
     `k²:${s.k2Final.toFixed(3)}`,
     `phase:${phaseEmoji}${phase}`,
     `Ψ_Res:${s.psiResonance.toFixed(2)}`,
+    `vsB:${s.vsB.toFixed(3)}`,
     `g:${s.g.toFixed(2)}`,
     `p:${s.p.toFixed(2)}`,
     `ρλτ:(${s.rho.toFixed(2)},${s.lam.toFixed(2)},${s.tau.toFixed(2)})`,

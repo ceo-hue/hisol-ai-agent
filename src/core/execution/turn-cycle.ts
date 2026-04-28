@@ -22,7 +22,7 @@ import { updateResonance } from '../cognition/resonance.js';
 import { buildOutSpec } from '../cognition/sensor-out.js';
 import { curlSquared } from '../grammar/operators.js';
 import { updateState, serializeState } from './state.js';
-import { computeK2Persona, computeTEntropy } from '../grammar/equations.js';
+import { computeK2Persona, computeTEntropy, bridgeUpdatePsiRes } from '../grammar/equations.js';
 import {
   computePIDGains,
   computeDynamicWCore,
@@ -93,6 +93,9 @@ export function executeTurn(
     vinCoords,
     velocity:   inResult.vin.pattern.velocity,
     k2Persona:  persona.k2Persona,
+    // Bridge: pass previous resonance + session-B momentum
+    prevPsiRes: prevResonance.value,
+    prevVsB:    prevState.vsB,
   });
 
   if (chainResult.psiDiss) {
@@ -179,11 +182,12 @@ export function executeTurn(
 
   // ── STEP 6: UPDATE state ─────────────────────────────────────
   const newBaseline  = updateBaseline(prevState.B, inResult.vin.entropy);
-  const newResonance = updateResonance(
-    prevResonance,
-    inResult.sigma,
-    decideResult.state === 'Particle'
-  );
+
+  // Bridge Ψ_Res update rule — replaces raw sigma-magnitude accumulation
+  // Ψ_Res(t) = clamp(Ψ_Res(t−1) + C×0.12 − Γ×0.08, 0, 1.0)
+  const rawResonance    = updateResonance(prevResonance, inResult.sigma, decideResult.state === 'Particle');
+  const bridgePsiRes    = bridgeUpdatePsiRes(prevResonance.value, chainResult.C, chainResult.Gamma);
+  const newResonance    = { ...rawResonance, value: bridgePsiRes };
 
   const newState = updateState(prevState, {
     B:            newBaseline,
@@ -197,6 +201,7 @@ export function executeTurn(
     k2Final:      chainResult.k2Final,
     phase:        decideResult.state,
     psiResonance: newResonance.value,
+    vsB:          chainResult.vsB,
     g:            chainResult.g,
     p:            chainResult.p,
     rho:          outSpec.sigmaStyle.rhoFinal,
