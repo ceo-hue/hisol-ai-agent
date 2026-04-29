@@ -39,6 +39,9 @@ export interface ARHAState {
   tEntropy:      number;    // raw contextual entropy temperature T
   tEffective:    number;    // PATCH_A: T after Absolute Zero guard (0 when V1_check fires)
   pParticle:     number;    // Boltzmann P(Particle) probability [0,1]
+  // VolC v3.0 — Binding Energy & Accumulated Stress
+  gammaTotal: number;  // Γ_total — Wave-accumulated stress (Γ_inst + κ×∫exp(λt)dt)
+  EB:         number;  // E_B — 결합에너지 = C²×ln(1+Γ_total)
   // Self-Evolution Circuit
   sustainedHighGamma: number;  // consecutive turns with Γ > 0.6 (sigma_eureka prerequisite)
   evolutionCount:     number;  // total V1_sub evolution events this session
@@ -83,6 +86,8 @@ export function initState(params: {
     tEntropy:           0.40,
     tEffective:         0.40,
     pParticle:          0.0,
+    gammaTotal:         0,
+    EB:                 0,
     sustainedHighGamma: 0,
     evolutionCount:     0,
   };
@@ -138,6 +143,8 @@ export function serializeState(s: ARHAState): string {
     `g:${s.g.toFixed(2)}`,
     `p:${s.p.toFixed(2)}`,
     `ρλτ:(${s.rho.toFixed(2)},${s.lam.toFixed(2)},${s.tau.toFixed(2)})`,
+    `Γ_tot:${s.gammaTotal.toFixed(3)}`,
+    `E_B:${s.EB.toFixed(4)}`,
     `w_dyn:${s.wCoreDynamic.toFixed(3)}`,
     `w_sub:[${s.wSubsDynamic.map(w => w.toFixed(3)).join(',')}]`,
     `T:${s.tEntropy.toFixed(3)}`,

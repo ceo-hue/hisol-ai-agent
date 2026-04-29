@@ -8,6 +8,13 @@
  *   PATCH_A  Absolute Zero Override   — V1_check forces T_eff → 0
  *   PATCH_B  Softmax w_sub            — energy-conserved sub-weight redistribution
  *   SELF_EVO sigma_eureka detection   — triggers V1_sub evolution in ARHARuntime
+ *
+ * VolC v3.0 additions:
+ *   Γ_total   Wave-accumulated stress  — computeGammaTotal
+ *   E_B       Binding energy           — computeBindingEnergy
+ *   Gain_S    Sensory gain             — computeGainS
+ *   Thermal   Particle cooling         — computeThermalCooling
+ *   ρλτ_phys  Physics-layer ρ/λ/τ     — active when E_B > 0.1
  */
 
 import type { PersonaDefinition, ValueChain } from '../identity/persona.js';
@@ -22,7 +29,11 @@ import { updateResonance } from '../cognition/resonance.js';
 import { buildOutSpec } from '../cognition/sensor-out.js';
 import { curlSquared } from '../grammar/operators.js';
 import { updateState, serializeState } from './state.js';
-import { computeK2Persona, computeTEntropy, bridgeUpdatePsiRes } from '../grammar/equations.js';
+import {
+  computeK2Persona, computeTEntropy, bridgeUpdatePsiRes,
+  computeGammaTotal, computeBindingEnergy, computeGainS,
+  computeThermalCooling, computeRhoPhysics, computeLambdaPhysics, computeTauPhysics,
+} from '../grammar/equations.js';
 import {
   computePIDGains,
   computeDynamicWCore,
@@ -85,6 +96,13 @@ export function executeTurn(
     : curlSquared(inResult.sigma);
 
   // ── STEP 3: CHAIN ────────────────────────────────────────────
+  // VolC v3.0 — Γ_total(t−1): accumulated stress from previous state, fed into value_strength
+  const prevGammaTotal = computeGammaTotal(
+    prevState.Gamma ?? 0,
+    prevState.waveCount,
+    prevState.phase === 'Wave',
+  );
+
   const vinCoords = inResult.sigma.coords;
   const chainResult = stageChain({
     P:          persona.P,
@@ -94,8 +112,9 @@ export function executeTurn(
     velocity:   inResult.vin.pattern.velocity,
     k2Persona:  persona.k2Persona,
     // Bridge: pass previous resonance + session-B momentum
-    prevPsiRes: prevResonance.value,
-    prevVsB:    prevState.vsB,
+    prevPsiRes:      prevResonance.value,
+    prevVsB:         prevState.vsB,
+    prevGammaTotal,  // ← VolC v3.0: Γ_total(t−1) for value_strength
   });
 
   if (chainResult.psiDiss) {
@@ -155,6 +174,33 @@ export function executeTurn(
     wCoreDynamic,
   });
 
+  // ── VolC v3.0: Γ_total / E_B / Thermal Cooling / Physics ρλτ ──────────
+  // Γ_total(t): current turn's accumulated stress — uses decideResult.state for Wave flag
+  const gammaTotal = computeGammaTotal(
+    chainResult.Gamma,
+    prevState.waveCount,
+    decideResult.state === 'Wave',
+  );
+
+  // E_B — binding energy: C²×ln(1+Γ_total)
+  const EB = computeBindingEnergy(chainResult.C, gammaTotal);
+
+  // Gain_S — sensory gain (high stress, low E_B → heightened sensing)
+  // Computed here for future SRE→Ex pipeline integration; not yet stored in state.
+  const _gainS = computeGainS(gammaTotal, EB); // eslint-disable-line @typescript-eslint/no-unused-vars
+
+  // Thermal Cooling — Particle phase convergence: T_eff → T_base (0.10)
+  // Applied to the stored T_eff (next turn will inherit cooled temperature).
+  const tEffectiveStored = (decideResult.state === 'Particle' && tEffective > 0)
+    ? computeThermalCooling(0.10, tEffective, EB)
+    : tEffective;
+
+  // Physics ρ/λ/τ — activated once E_B ≥ 0.1 (sufficient binding energy)
+  // Below threshold: P-base boot values (from outSpec) remain active.
+  const ebActive   = EB >= 0.1;
+  // Mode_9 Vacuum_Bath proxy: waveCount surge → mode_9 weight drops
+  const mode9Weight = 1 - Math.min(1, prevState.waveCount / 8);
+
   // ── SELF-EVOLUTION DETECTION ──────────────────────────────────
   // sigma_eureka condition:
   //   • Sustained high Γ (≥ 2 consecutive Red turns) — friction & tension
@@ -180,14 +226,26 @@ export function executeTurn(
     p:         chainResult.p,
   });
 
+  // Physics-overridden ρ/λ/τ — replaces outSpec values when E_B ≥ 0.1
+  const rhoFinal = ebActive
+    ? computeRhoPhysics(EB, chainResult.C)
+    : outSpec.sigmaStyle.rhoFinal;
+  const lamFinal = ebActive
+    ? computeLambdaPhysics(mode9Weight, EB)
+    : outSpec.sigmaStyle.lamFinal;
+  const tauFinal = ebActive
+    ? computeTauPhysics(chainResult.RTension)
+    : outSpec.sigmaStyle.tauFinal;
+
   // ── STEP 6: UPDATE state ─────────────────────────────────────
   const newBaseline  = updateBaseline(prevState.B, inResult.vin.entropy);
 
-  // Bridge Ψ_Res update rule — replaces raw sigma-magnitude accumulation
-  // Ψ_Res(t) = clamp(Ψ_Res(t−1) + C×0.12 − Γ×0.08, 0, 1.0)
-  const rawResonance    = updateResonance(prevResonance, inResult.sigma, decideResult.state === 'Particle');
-  const bridgePsiRes    = bridgeUpdatePsiRes(prevResonance.value, chainResult.C, chainResult.Gamma);
-  const newResonance    = { ...rawResonance, value: bridgePsiRes };
+  // Bridge Ψ_Res update rule [VolC v3.0]
+  // Ψ_Res(t) = clamp(Ψ_Res(t−1) + C×0.12 − Γ_total×0.08, 0, 1.0)
+  // Note: gammaTotal (accumulated) replaces raw chainResult.Gamma (instantaneous)
+  const rawResonance = updateResonance(prevResonance, inResult.sigma, decideResult.state === 'Particle');
+  const bridgePsiRes = bridgeUpdatePsiRes(prevResonance.value, chainResult.C, gammaTotal);
+  const newResonance = { ...rawResonance, value: bridgePsiRes };
 
   const newState = updateState(prevState, {
     B:            newBaseline,
@@ -204,17 +262,21 @@ export function executeTurn(
     vsB:          chainResult.vsB,
     g:            chainResult.g,
     p:            chainResult.p,
-    rho:          outSpec.sigmaStyle.rhoFinal,
-    lam:          outSpec.sigmaStyle.lamFinal,
-    tau:          outSpec.sigmaStyle.tauFinal,
+    // Physics ρ/λ/τ — physics values when E_B active, P-base otherwise
+    rho:          rhoFinal,
+    lam:          lamFinal,
+    tau:          tauFinal,
     psiDiss:      chainResult.psiDiss,
     // Chip circuit state
     wCoreDynamic,
     wSubsDynamic,
     tEntropy,
-    tEffective,
+    tEffective:   tEffectiveStored,  // ← thermally cooled in Particle phase
     pParticle:          decideResult.pParticle,
     sustainedHighGamma,
+    // VolC v3.0 — binding energy & accumulated stress
+    gammaTotal,
+    EB,
     // evolutionCount is updated by ARHARuntime after sigma_eureka, not here
   });
 

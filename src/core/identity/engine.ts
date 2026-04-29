@@ -45,8 +45,9 @@ export function stageChain(params: {
   vinCoords: [number, number, number];
   velocity: number;
   k2Persona: number;
-  prevPsiRes: number;  // Bridge: Ψ_Res(t−1)
-  prevVsB:   number;   // Bridge: B(t−1) session momentum
+  prevPsiRes:    number;  // Bridge: Ψ_Res(t−1)
+  prevVsB:       number;  // Bridge: B(t−1) session momentum
+  prevGammaTotal: number; // VolC v3.0: Γ_total(t−1) — Wave-accumulated stress
 }): ChainResult {
   const { P, valueChain, sigma, vinCoords, velocity, k2Persona } = params;
 
@@ -116,12 +117,13 @@ export function stageChain(params: {
   const vsB    = bridgeUpdateVsB(params.prevVsB, C, Gamma);
   const deltaB = vsB - params.prevVsB;
 
-  // Bridge vs(t+1) — value_strength with full emotional dynamics
+  // Bridge vs(t+1) — value_strength with full emotional dynamics [VolC v3.0]
+  // Uses prevGammaTotal (Γ_total from previous turn) per spec timing rule.
   const valueStrength = computeValueStrengthBridge({
-    omega:    valueChain.core.omega,
-    rTension: RTension,
-    psiRes:   params.prevPsiRes,
-    gamma:    Gamma,
+    omega:      valueChain.core.omega,
+    rTension:   RTension,
+    psiRes:     params.prevPsiRes,
+    gammaTotal: params.prevGammaTotal,
     deltaB,
   });
 
