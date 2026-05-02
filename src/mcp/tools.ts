@@ -26,20 +26,28 @@ import { runAgentTurn } from '../core/agent/loop.js';
 import { DEFAULT_HOOKS } from '../core/agent/hooks.js';
 import type { PersonaVector } from '../core/identity/persona.js';
 import Anthropic from '@anthropic-ai/sdk';
+import { sessionRegistry } from '../core/session/registry.js';
+import { getPersistenceHealth } from '../core/execution/persistence.js';
 
 // ─────────────────────────────────────────
-// SESSION REGISTRY
+// SESSION ACCESS — backed by SessionRegistry (LRU + TTL + serial queue)
 // ─────────────────────────────────────────
 
-const sessions = new Map<string, ARHARuntime>();
-
+/** Mutating access path: touches LRU, creates if missing. */
 function getOrCreateRuntime(sessionId: string, personaId = 'HighSol'): ARHARuntime {
-  if (!sessions.has(sessionId)) {
-    // Pass sessionId so runtime loads from Π persistence
-    sessions.set(sessionId, new ARHARuntime(personaId, sessionId));
-  }
-  return sessions.get(sessionId)!;
+  return sessionRegistry.get(sessionId, personaId);
 }
+
+/**
+ * Read-only access — returns undefined if session not in RAM.
+ * Does NOT auto-create; mirrors the old `sessions.get()` semantics so
+ * existence-check handlers (arha_status, arha_session_handoff) keep
+ * their "session must exist" contract instead of silently spawning fresh
+ * runtimes that would mask client bugs.
+ */
+const sessions = {
+  get: (sessionId: string): ARHARuntime | undefined => sessionRegistry.peek(sessionId),
+};
 
 // ─────────────────────────────────────────
 // TOOL DEFINITIONS
@@ -65,62 +73,71 @@ export const ARHA_TOOLS = [
       required: ['input'],
     },
     handler: async (args: { input: string; sessionId?: string; personaId?: string }) => {
-      const sid     = args.sessionId ?? 'default';
-      const runtime = getOrCreateRuntime(sid, args.personaId);
-      const result  = runtime.process({ text: args.input, sessionId: sid });
+      const sid       = args.sessionId ?? 'default';
+      const personaId = args.personaId ?? 'HighSol';
 
-      return {
-        // Vol.D runtime state — structured fields for Claude
-        arhaState:    result.arhaState,
-        qualityGrade: result.qualityGrade,
-        stateBlock:   result.stateBlock,
-        phaseLabel:   result.phaseLabel,
-        errorFlags:   result.errorFlags,
-        // Vol.C output spec
-        tone:         result.outSpec.sigmaStyle.tone,
-        lingua: {
-          rho: result.outSpec.sigmaStyle.rhoFinal,
-          lam: result.outSpec.sigmaStyle.lamFinal,
-          tau: result.outSpec.sigmaStyle.tauFinal,
-        },
-        // Vol.E wave instruction (if active)
-        waveInstruction: result.promptContext.waveInstruction ?? null,
-        // Vol.F/G routing metadata
-        volF:      result.volF ? {
-          ref:             result.volF.ref,
-          status:          result.volF.status,
-          currentLayer:    result.volF.currentLayer,
-          completedLayers: result.volF.completedLayers,
-          outputArtifact:  result.volF.outputArtifact,
-        } : null,
-        volGLayer: result.volGLayer,
-        // System prompt (structured Vol.A~F~G format)
-        systemPrompt: runtime.buildStructuredSystemPrompt(result),
-        sessionId:    sid,
-      };
+      // Per-session serial queue — 같은 sessionId 동시 호출은 FIFO로 직렬화.
+      // Turn n과 Turn n+1이 겹쳐 실행되면 state·history·snapshots가 손상된다.
+      // "정신의 일관성" — 분열되지 않은 자아.
+      return sessionRegistry.runSerialized(sid, personaId, async (runtime) => {
+        const result = runtime.process({ text: args.input, sessionId: sid });
+
+        return {
+          // Vol.D runtime state — structured fields for Claude
+          arhaState:    result.arhaState,
+          qualityGrade: result.qualityGrade,
+          stateBlock:   result.stateBlock,
+          phaseLabel:   result.phaseLabel,
+          errorFlags:   result.errorFlags,
+          // Vol.C output spec
+          tone:         result.outSpec.sigmaStyle.tone,
+          lingua: {
+            rho: result.outSpec.sigmaStyle.rhoFinal,
+            lam: result.outSpec.sigmaStyle.lamFinal,
+            tau: result.outSpec.sigmaStyle.tauFinal,
+          },
+          // Vol.E wave instruction (if active)
+          waveInstruction: result.promptContext.waveInstruction ?? null,
+          // Vol.F/G routing metadata
+          volF:      result.volF ? {
+            ref:             result.volF.ref,
+            status:          result.volF.status,
+            currentLayer:    result.volF.currentLayer,
+            completedLayers: result.volF.completedLayers,
+            outputArtifact:  result.volF.outputArtifact,
+          } : null,
+          volGLayer: result.volGLayer,
+          // System prompt (structured Vol.A~F~G format)
+          systemPrompt: runtime.buildStructuredSystemPrompt(result),
+          sessionId:    sid,
+        };
+      });
     },
   },
 
   // ── 2. arha_status ──────────────────────────────────────────────────────────
   {
     name: 'arha_status',
-    description: 'ARHA 세션 현재 STATE 블록 조회 + Ψ_Resonance + 최근 스냅샷 이력',
+    description:
+      'ARHA 세션 현재 STATE 블록 조회 + Ψ_Resonance + 최근 스냅샷 이력. ' +
+      'includeHealth:true 옵션으로 서버 운영 지표(메모리 세션 수, 영속화 성공/실패)도 함께 반환.',
     inputSchema: {
       type: 'object',
       properties: {
         sessionId:      { type: 'string' },
         includeHistory: { type: 'boolean', description: '스냅샷 이력 포함 여부 (기본: false)' },
+        includeHealth:  { type: 'boolean', description: '서버 health 지표 포함 (기본: false)' },
       },
       required: ['sessionId'],
     },
-    handler: async (args: { sessionId: string; includeHistory?: boolean }) => {
+    handler: async (args: { sessionId: string; includeHistory?: boolean; includeHealth?: boolean }) => {
       const runtime = sessions.get(args.sessionId);
       if (!runtime) return { error: `Session not found: ${args.sessionId}` };
 
       const state     = runtime.getState();
       const resonance = runtime.getResonance();
 
-      const base = {
+      const base: Record<string, unknown> = {
         personaId:    runtime.getPersonaId(),
         turnCount:    runtime.getTurnCount(),
         phase:        state.phase,
@@ -140,8 +157,12 @@ export const ARHA_TOOLS = [
         },
       };
 
-      if (args.includeHistory) {
-        return { ...base, snapshots: runtime.getSnapshots() };
+      if (args.includeHistory) base.snapshots = runtime.getSnapshots();
+      if (args.includeHealth) {
+        base._health = {
+          registry:    sessionRegistry.stats(),
+          persistence: getPersistenceHealth(),
+        };
       }
       return base;
     },
@@ -778,8 +799,8 @@ export const ARHA_TOOLS = [
       maxTokens?:   number;
       enableHooks?: boolean;
     }) => {
-      const sid     = args.sessionId ?? 'default';
-      const runtime = getOrCreateRuntime(sid, args.personaId);
+      const sid       = args.sessionId ?? 'default';
+      const personaId = args.personaId ?? 'HighSol';
 
       let anthropic: Anthropic;
       try {
@@ -790,47 +811,51 @@ export const ARHA_TOOLS = [
         return { error: 'ANTHROPIC_API_KEY not set. Set it in environment to use arha_agent_run.' };
       }
 
-      try {
-        const result = await runAgentTurn(
-          args.input,
-          {
-            sessionId:   sid,
-            personaId:   args.personaId,
-            model:       args.model,
-            maxTokens:   args.maxTokens,
-            hooks:       (args.enableHooks ?? true) ? DEFAULT_HOOKS : [],
-          },
-          runtime,
-          anthropic,
-        );
+      // Per-session serial queue — agent turn은 LLM 왕복 + state 변경.
+      // 이 호출 중 같은 세션의 arha_process가 끼어들면 turn 카운터·resonance가 꼬임.
+      return sessionRegistry.runSerialized(sid, personaId, async (runtime) => {
+        try {
+          const result = await runAgentTurn(
+            args.input,
+            {
+              sessionId:   sid,
+              personaId:   args.personaId,
+              model:       args.model,
+              maxTokens:   args.maxTokens,
+              hooks:       (args.enableHooks ?? true) ? DEFAULT_HOOKS : [],
+            },
+            runtime,
+            anthropic,
+          );
 
-        return {
-          response:     result.response,
-          sessionId:    result.sessionId,
-          personaId:    result.personaId,
-          turn:         result.turn,
-          qualityGrade: result.qualityGrade,
-          arhaState: {
-            C:            result.arhaState.C,
-            Gamma:        result.arhaState.Gamma,
-            phase:        result.arhaState.phase,
-            psiResonance: result.arhaState.psiResonance,
-            vsB:          result.arhaState.vsB,
-            g:            result.arhaState.g,
-            p:            result.arhaState.p,
-            waveCount:    result.arhaState.waveCount,
-          },
-          hooksFired:   result.hooksFired,
-          tokens: {
-            input:  result.inputTokens,
-            output: result.outputTokens,
-          },
-          // system prompt는 필요 시 arha_process로 별도 조회
-        };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return { error: msg };
-      }
+          return {
+            response:     result.response,
+            sessionId:    result.sessionId,
+            personaId:    result.personaId,
+            turn:         result.turn,
+            qualityGrade: result.qualityGrade,
+            arhaState: {
+              C:            result.arhaState.C,
+              Gamma:        result.arhaState.Gamma,
+              phase:        result.arhaState.phase,
+              psiResonance: result.arhaState.psiResonance,
+              vsB:          result.arhaState.vsB,
+              g:            result.arhaState.g,
+              p:            result.arhaState.p,
+              waveCount:    result.arhaState.waveCount,
+            },
+            hooksFired:   result.hooksFired,
+            tokens: {
+              input:  result.inputTokens,
+              output: result.outputTokens,
+            },
+            // system prompt는 필요 시 arha_process로 별도 조회
+          };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { error: msg };
+        }
+      });
     },
   },
 

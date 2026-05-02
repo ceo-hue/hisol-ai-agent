@@ -1,7 +1,24 @@
 /**
  * ARHA MCP Server — ARHA Vol.A~E 체계 기반
  * 기존 hisol-unified-mcp server.ts 교체
+ *
+ * ⚠ MCP stdio safety:
+ *   stdout은 JSON-RPC 프로토콜 전용입니다.
+ *   라이브러리 어디서든 console.log/info가 호출되면 클라이언트가 즉시 깨집니다.
+ *   모든 console 출력을 stderr로 강제 리다이렉트해 안전망을 둡니다.
+ *   (MCP SDK 자체는 process.stdout.write를 직접 사용하므로 영향 없음)
+ *
+ * 운영 안정성 (시니어 P0):
+ *   • Handler timeout    — 30초 초과 호출은 클라이언트가 이미 포기. 서버도 풀어준다.
+ *   • Graceful shutdown  — SIGINT/SIGTERM 수신 시 모든 세션을 Π에 flush.
+ *                          ARHA의 "작별의 예의": 마지막 턴까지 기억으로 남긴다.
+ *   • Error sanitization — 내부 에러 메시지를 그대로 client로 흘리면 경로/스택 leak.
+ *                          짧고 안전한 메시지만 노출.
  */
+
+// MUST be at the very top — before any other import that might log.
+console.log  = console.error;
+console.info = console.error;
 
 import 'dotenv/config';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -16,6 +33,14 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 
 import { ARHA_TOOLS } from './tools.js';
+import { sessionRegistry } from '../core/session/registry.js';
+
+// ─────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────
+
+/** Per-call wallclock budget. env: ARHA_HANDLER_TIMEOUT_MS, default 30s. */
+const HANDLER_TIMEOUT_MS = Number(process.env.ARHA_HANDLER_TIMEOUT_MS ?? '30000');
 
 const server = new Server(
   {
@@ -26,7 +51,46 @@ const server = new Server(
   { capabilities: { tools: {}, prompts: {}, resources: {} } }
 );
 
-// List tools
+// ─────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────
+
+/**
+ * Race a promise against a timeout. The timer is cleared on either outcome
+ * to prevent unref'd timeouts from holding the event loop open.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new McpError(
+        ErrorCode.InternalError,
+        `ARHA tool '${label}' timed out after ${ms}ms`,
+      ));
+    }, ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+/**
+ * Convert any thrown value into a sanitized MCP-safe message.
+ * - Drops stack traces, file paths, and unbounded payloads.
+ * - Re-throws McpError as-is (already shaped by the SDK).
+ */
+function sanitizeError(err: unknown, toolName: string): McpError {
+  if (err instanceof McpError) return err;
+  const raw = err instanceof Error ? err.message : String(err);
+  // Cap length to avoid runaway error messages flooding the client log.
+  const safe = raw.length > 500 ? raw.slice(0, 500) + '…' : raw;
+  return new McpError(ErrorCode.InternalError, `[${toolName}] ${safe}`);
+}
+
+// ─────────────────────────────────────────
+// REQUEST HANDLERS
+// ─────────────────────────────────────────
+
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: ARHA_TOOLS.map(t => ({
     name: t.name,
@@ -35,7 +99,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   })),
 }));
 
-// Call tool
 server.setRequestHandler(CallToolRequestSchema, async (req) => {
   const { name, arguments: args } = req.params;
   const tool = ARHA_TOOLS.find(t => t.name === name);
@@ -45,21 +108,73 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   }
 
   try {
-    const result = await (tool.handler as Function)(args ?? {});
+    const result = await withTimeout(
+      Promise.resolve((tool.handler as Function)(args ?? {})),
+      HANDLER_TIMEOUT_MS,
+      name,
+    );
     return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    throw new McpError(ErrorCode.InternalError, `ARHA error: ${message}`);
+    throw sanitizeError(err, name);
   }
 });
 
 server.setRequestHandler(ListPromptsRequestSchema, async () => ({ prompts: [] }));
 server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: [] }));
 
+// ─────────────────────────────────────────
+// GRACEFUL SHUTDOWN — 작별의 예의
+// ─────────────────────────────────────────
+
+let shuttingDown = false;
+function shutdown(signal: string, exitCode = 0): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
+
+  console.error(`[ARHA MCP] ${signal} received — flushing ${sessionRegistry.list().length} sessions to Π`);
+  try {
+    sessionRegistry.flushAll();
+    sessionRegistry.clear();
+  } catch (e) {
+    console.error('[ARHA MCP] flushAll error during shutdown:', e);
+  }
+  console.error('[ARHA MCP] shutdown complete');
+  process.exit(exitCode);
+}
+
+process.on('SIGINT',  () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+// Last-line defense: even if the event loop empties, flush before exiting.
+// beforeExit fires only when no pending I/O, so it's the safest "natural exit" hook.
+process.on('beforeExit', () => {
+  if (shuttingDown) return;
+  try { sessionRegistry.flushAll(); } catch { /* best effort */ }
+});
+
+// Unhandled rejections should NOT crash an MCP server silently — log loudly to stderr.
+process.on('unhandledRejection', (reason) => {
+  console.error('[ARHA MCP] unhandledRejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[ARHA MCP] uncaughtException:', err);
+  shutdown('uncaughtException', 1);
+});
+
+// ─────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────
+
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('[ARHA MCP] Server started — Vol.A~E 체계 활성');
+  console.error(
+    `[ARHA MCP] Server started — Vol.A~E 체계 활성 ` +
+    `(timeout=${HANDLER_TIMEOUT_MS}ms, sessions: see arha_status)`,
+  );
 }
 
-main().catch(console.error);
+main().catch((err) => {
+  console.error('[ARHA MCP] Fatal boot error:', err);
+  process.exit(1);
+});

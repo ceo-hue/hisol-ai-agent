@@ -59,10 +59,12 @@ export function log(
     `${color}${label}${reset} ${levelColor}${level}${reset} ${message}` +
     (metadata ? ` ${JSON.stringify(metadata)}` : '');
 
+  // MCP stdio safety: ALL log levels go to stderr.
+  // stdout is reserved for JSON-RPC traffic — any text there breaks the client parser.
   if (level === 'ERROR') console.error(formatted);
   else if (level === 'WARN') console.warn(formatted);
   else if (level === 'DEBUG') { if (process.env.DEBUG === 'true') console.debug(formatted); }
-  else console.log(formatted);
+  else console.error(formatted);  // INFO — stderr (was console.log → broke MCP)
 }
 
 export class ARHALogger {

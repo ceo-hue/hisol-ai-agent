@@ -186,7 +186,8 @@ export function evaluateHooks(
     }
 
     if (hook.action.type === 'log') {
-      console.log(`[ARHA Hook:${hook.id}] ${hook.action.label} — turn ${currentTurn}`);
+      // stderr — MCP stdio safety
+      console.error(`[ARHA Hook:${hook.id}] ${hook.action.label} — turn ${currentTurn}`);
     }
 
     fired.push(event);

@@ -173,7 +173,8 @@ export class ARHARuntime {
           this.turnCount = saved.partialState.turn;
         }
 
-        console.log(
+        // stderr — MCP stdio safety
+        console.error(
           `[ARHA Π] Restored session ${sessionId}: turn ${this.turnCount}, ` +
           `Ψ_Res=${saved.resonance.value.toFixed(3)}, ` +
           `vsB=${saved.fullState?.vsB?.toFixed(3) ?? 'n/a'}`
@@ -181,7 +182,8 @@ export class ARHARuntime {
       }
     }
 
-    console.log(`[ARHA] ${bootResult.summary}`);
+    // stderr — MCP stdio safety (was console.log → broke JSON-RPC stream)
+    console.error(`[ARHA] ${bootResult.summary}`);
   }
 
   // ─────────────────────────────────────────
@@ -330,17 +332,30 @@ export class ARHARuntime {
   /** Add assistant response to history and flush to Π persistence. */
   recordAssistantResponse(content: string): void {
     this.history.push({ role: 'assistant', content });
-    if (this.activeSessionId) {
-      persistSession(
-        this.activeSessionId,
-        this.personaId,
-        this.resonance,
-        this.state,
-        this.history,
-        this.snapshots
-      );
-    }
+    this.flush();
   }
+
+  /**
+   * Flush current state to Π persistence without modifying history.
+   * Used by SessionRegistry on eviction and by graceful shutdown — the "작별의 예의":
+   * RAM에서 사라지기 전 기억을 안전한 디스크 자리에 둔다.
+   * No-op when no active session is bound.
+   */
+  flush(): void {
+    if (!this.activeSessionId) return;
+    persistSession(
+      this.activeSessionId,
+      this.personaId,
+      this.resonance,
+      this.state,
+      this.history,
+      this.snapshots,
+    );
+  }
+
+  /** Session ID this runtime is bound to (null if ephemeral). */
+  getSessionId(): string | null { return this.activeSessionId; }
+  // Note: getPersonaId() is defined further down (legacy location); not duplicated here.
 
   /** Rolling conversation history for Claude API messages[]. */
   getHistory(): ConversationMessage[] { return [...this.history]; }
@@ -551,7 +566,8 @@ export class ARHARuntime {
       evolutionCount: this.state.evolutionCount + 1,
     };
 
-    console.log(
+    // stderr — MCP stdio safety
+    console.error(
       `[ARHA Self-Evolution] Turn ${state.turn}: V1_sub[${newSub.n}] created ` +
       `(γ=${newGamma.toFixed(3)} α=${newSub.alpha.toFixed(3)}) — ` +
       `total subs: ${this.liveValueChain.subs.length}`
