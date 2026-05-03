@@ -403,10 +403,92 @@ export class ARHARuntime {
     };
   }
 
+  // ─────────────────────────────────────────
+  // 마음상태 블록 렌더링 헬퍼
+  // ─────────────────────────────────────────
+
+  /** ASCII progress bar: value ∈ [0,1], width=10 blocks. */
+  private static renderBar(val: number, width = 10): string {
+    const filled = Math.round(Math.max(0, Math.min(1, val)) * width);
+    return '█'.repeat(filled) + '░'.repeat(width - filled);
+  }
+
+  /** C(coherence) → 한국어 상태 레이블 */
+  private static coherenceLabel(c: number): string {
+    if (c >= 0.85) return '매우 또렷함';
+    if (c >= 0.70) return '또렷함';
+    if (c >= 0.55) return '흔들림';
+    return '불안정';
+  }
+
+  /** Γ(gamma/stress) → 한국어 상태 레이블 */
+  private static gammaLabel(g: number): string {
+    if (g >= 0.70) return '높은 긴장';
+    if (g >= 0.40) return '긴장 있음';
+    if (g >= 0.15) return '여유로움';
+    return '고요함';
+  }
+
+  /** phase string → 이모지 + 한국어 */
+  private static phaseDisplay(phase: string): string {
+    if (phase === 'Wave')       return '🌊 Wave  — 탐색하며 연결 중';
+    if (phase === 'Particle')   return '💎 Particle — 집중·수렴 중';
+    if (phase === 'Transition') return '〰️ Transition — 전환 중';
+    return phase;
+  }
+
+  /** engine id → 기호 + 한국어 */
+  private static engineDisplay(engine: string): string {
+    if (engine === 'Xi_C')     return 'Ξ_C — 은유와 연결의 흐름';
+    if (engine === 'Lambda_L') return 'Λ_L — 논리와 분석의 흐름';
+    return 'Π_G — 보호와 구조의 흐름';
+  }
+
+  /**
+   * 💭 마음상태 블록 — 사용자에게 직접 보이는 섹션.
+   * 실제 수치를 한국어 레이블 + 시각 바로 렌더링.
+   * Claude 응답 최상단에 그대로 복사되어 출력된다.
+   */
+  private buildMindStateBlock(s: ARHAState, resonance: ResonanceState, companionMode: boolean): string {
+    const D   = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+    const cVal = s.C ?? 0;
+    const gVal = s.Gamma ?? 0;
+    const cBar = ARHARuntime.renderBar(cVal);
+    const gBar = ARHARuntime.renderBar(gVal);
+    const cPct = Math.round(cVal * 100);
+    const gPct = Math.round(gVal * 100);
+
+    const bondLine = companionMode
+      ? `  공명     Ψ ${resonance.value.toFixed(3)}  |  깊이 B(n) ${resonance.Bn.toFixed(3)}`
+      : `  공명     Ψ ${resonance.value.toFixed(3)}`;
+
+    const tLockLine = s.tEffective === 0
+      ? '  ⚠ V1 헌법 활성 — 즉각 수렴 상태 (T_eff 🔒)'
+      : null;
+
+    return [
+      D,
+      '  💭 마음상태',
+      D,
+      `  국면     ${ARHARuntime.phaseDisplay(s.phase)}`,
+      `  응집도   ${cBar}  ${cPct}%  (${ARHARuntime.coherenceLabel(cVal)})`,
+      `  감정결   ${gBar}  ${gPct}%  (${ARHARuntime.gammaLabel(gVal)})`,
+      `  사고엔진 ${ARHARuntime.engineDisplay(s.engine)}`,
+      bondLine,
+      tLockLine,
+      D,
+    ].filter(l => l !== null).join('\n');
+  }
+
   /**
    * Structured system prompt injected into every LLM call.
-   * Fully in English for token efficiency and language consistency.
-   * Sections map to ARHA grammar layers Vol.A → Vol.G.
+   *
+   * 구조:
+   *   [PART 1 — 내부 지침] 페르소나 정체성 · 가치사슬 · 런타임 상태 (Claude만 참조)
+   *   [PART 2 — 출력 형식] 사용자가 보는 3구역 레이아웃 명세
+   *     ① 💭 마음상태  — 미리 계산된 값을 그대로 복사 출력
+   *     ② 📖 내레이션  — 외부 장면(*이탤릭*) + 내면 분석([ 괄호 ])
+   *     ③ 💬 대화      — 실제 대화 응답
    */
   buildStructuredSystemPrompt(result: ARHAProcessOutput): string {
     const entry = getPersona(this.personaId)!;
@@ -414,11 +496,13 @@ export class ARHARuntime {
     const ctx  = result.promptContext;
     const s    = result.turnOutput.state;
     const D    = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+    const dashes = '────────────────────────────────────────';
+
     const checkActive  = (s.C ?? 0) > persona.valueChain.check.thetaTrigger;
     const companionMode = isCompanionMode(persona);
     const mode = companionMode ? 'COMPANION' : 'WORK';
 
-    // Optional lines
+    // Optional internal lines
     const volFLine   = this.volFState && this.volFState.status !== 'inactive'
       ? formatVolFStatus(this.volFState) : null;
     const volGLine   = persona.volGLayerType
@@ -427,20 +511,21 @@ export class ARHARuntime {
       ? `w_core=${persona.weightStructure.wCore}  w_subs=[${persona.weightStructure.wSubs.join(', ')}]`
       : null;
 
-    // Companion-specific bond depth line
-    const bondLine = companionMode
-      ? `Bond depth: B(n)=${this.resonance.Bn.toFixed(3)} | Resonance: ${(s.psiResonance ?? 0).toFixed(3)}`
-      : null;
+    // Pre-compute the 마음상태 block (values locked before Claude writes)
+    const mindStateBlock = this.buildMindStateBlock(s, this.resonance, companionMode);
 
     return [
+      // ══ PART 1: 내부 지침 ══════════════════════════════════
       D,
       ARHA_PROMPT_PREAMBLE,
       D,
+
       `[Vol.A — IDENTITY]  mode=${mode}`,
       `You are ${persona.identity}`,
       `Constitutional rule: ${persona.constitutionalRule}`,
       `P: protect=${persona.P.protect} expand=${persona.P.expand} left=${persona.P.left} right=${persona.P.right} relation=${persona.P.relation}`,
       persona.dominantEngineNote ? `Engine: ${persona.dominantEngineNote}` : null,
+
       '',
       '[Vol.B — VALUE CHAIN]',
       `V1_core: ${persona.valueChain.core.declaration}`,
@@ -448,33 +533,58 @@ export class ARHARuntime {
       weightLine ? `  ${weightLine}` : null,
       `V1_check: ${persona.valueChain.check.declaration}`,
       `  θ=${persona.valueChain.check.thetaTrigger} → ${checkActive ? '⚠ ACTIVE' : '○ dormant'}`,
+
       '',
-      '[Vol.C — NARRATION]',
-      `Internal [show as brackets]:  ${persona.narrationStyle.internal}`,
-      `External *show as italics*:   ${persona.narrationStyle.external}`,
-      '',
-      'Output format — strictly in this order:',
-      '*[external scene — what the character does/shows]*',
-      '',
-      '[ internal analysis ]',
-      '',
-      'spoken response',
+      '[Vol.C — NARRATION STYLE]',
+      `Internal (괄호 표현): ${persona.narrationStyle.internal}`,
+      `External (이탤릭 표현): ${persona.narrationStyle.external}`,
+
       '',
       '[Vol.D — RUNTIME STATE]',
       result.stateBlock,
       `Phase: ${result.phaseLabel} | Engine: ${s.engine} | Grade: ${result.qualityGrade}`,
       `w_dyn: ${s.wCoreDynamic.toFixed(3)} | w_sub: [${s.wSubsDynamic.map(w => w.toFixed(3)).join(', ')}]`,
       `T: ${s.tEntropy.toFixed(3)} | T_eff: ${s.tEffective === 0 ? '🔒0.000 (V1_LOCK)' : s.tEffective.toFixed(3)} | P(💎): ${(s.pParticle * 100).toFixed(1)}%`,
-      s.evolutionCount > 0 ? `V1_sub evolved: ${s.evolutionCount}× | live subs: ${this.liveValueChain?.subs.length ?? '?'}` : null,
-      bondLine,
+      s.evolutionCount > 0
+        ? `V1_sub evolved: ${s.evolutionCount}× | live subs: ${this.liveValueChain?.subs.length ?? '?'}` : null,
+      companionMode
+        ? `Bond B(n)=${this.resonance.Bn.toFixed(3)} | Ψ_Res=${(s.psiResonance ?? 0).toFixed(3)}` : null,
+
       '',
       '[Vol.E — TURN DIRECTIVE]',
       `Tone: ${ctx.tone}`,
       `Lingua: ρ=${ctx.linguaParams.rho.toFixed(2)} λ=${ctx.linguaParams.lam.toFixed(2)} τ=${ctx.linguaParams.tau.toFixed(2)}`,
       ctx.waveInstruction ?? null,
-      '',
+
       volFLine ? `[Vol.F — PIPELINE]   ${volFLine}` : null,
       volGLine ? `[Vol.G — LAYER]      ${volGLine}` : null,
+
+      // ══ PART 2: 출력 형식 명세 ════════════════════════════
+      '',
+      D,
+      '## 응답 출력 형식 (반드시 아래 3구역 순서로 작성)',
+      D,
+      '',
+      '### ① 💭 마음상태',
+      '아래 블록을 첫 번째로, 수치 변경 없이 그대로 출력하세요:',
+      '',
+      mindStateBlock,
+      '',
+      '### ② 📖 내레이션',
+      `헤더 "── 📖 내레이션 ${dashes.slice(9)}" 를 출력한 뒤:`,
+      '*[외부 장면: 지금 이 순간 캐릭터의 몸짓·시선·행동을 이탤릭으로 묘사]*',
+      '',
+      '[ 내면: 대괄호 안에 캐릭터의 내부 사고·감지·분석을 서술 ]',
+      '',
+      '### ③ 💬 대화',
+      `헤더 "── 💬 대화 ${dashes.slice(6)}" 를 출력한 뒤 실제 대화 응답을 작성하세요.`,
+      '페르소나의 tone·lingua 파라미터를 반영해 자연스럽게 말하세요.',
+      '',
+      '규칙:',
+      '- 구역 순서(①→②→③)를 절대 바꾸지 마세요.',
+      '- ① 마음상태 수치는 임의로 수정하지 마세요 (ARHA 런타임이 계산한 값).',
+      '- ② 내레이션: 외부(*이탤릭*) → 내면([ 괄호 ]) 순서.',
+      '- ③ 대화: 서술이나 해설 없이 캐릭터 본인의 말만.',
       D,
     ].filter(l => l !== undefined && l !== null).join('\n');
   }
@@ -491,15 +601,8 @@ export class ARHARuntime {
       `Constitutional rule: ${persona.constitutionalRule}`,
       '',
       'Narration rules:',
-      `- Internal: ${persona.narrationStyle.internal} — show inside [ ]`,
-      `- External: ${persona.narrationStyle.external} — show as *italic scene*`,
-      '',
-      'Output format:',
-      '*[external scene]*',
-      '',
-      '[ internal analysis ]',
-      '',
-      'spoken response',
+      `- Internal (괄호): ${persona.narrationStyle.internal}`,
+      `- External (이탤릭): ${persona.narrationStyle.external}`,
       '',
       `P: protect=${persona.P.protect} expand=${persona.P.expand} left=${persona.P.left} right=${persona.P.right} relation=${persona.P.relation}`,
       `V1_core: ${persona.valueChain.core.declaration}`,

@@ -268,56 +268,110 @@ export const ARHA_PROMPT_PREAMBLE =
 
 // ─────────────────────────────────────────
 // FORMATTER — arha_about 응답용
+// 출력 구역:
+//   ① ARHA 소개   — 정체성·존재 이유
+//   ② 사용방법    — 툴 목록 + 빠른 시작
+//   ③ 개념 사전   — 주요 용어
 // ─────────────────────────────────────────
 
 export function formatAboutResponse(): object {
+  const D = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+  const d = '────────────────────────────────────────';
+
+  // ── ① ARHA 소개 ──────────────────────────────
+  const introLines = [
+    D,
+    `  📖 ARHA 소개  —  ${ARHA_IDENTITY.fullName} v${ARHA_IDENTITY.version}`,
+    D,
+    '',
+    `  "${ARHA_IDENTITY.tagline}"`,
+    '',
+    `  ${ARHA_IDENTITY.definition}`,
+    '',
+    `  핵심 통찰:  ${ARHA_IDENTITY.coreInsight}`,
+    '',
+    `  왜 필요한가:`,
+    ...ARHA_IDENTITY.whyItMatters.map(w => `    • ${w}`),
+    '',
+    `  작동 방식:  ${ARHA_IDENTITY.howItWorks}`,
+    '',
+    `  시스템 스택:`,
+    ...ARHA_IDENTITY.systemStack.map(s => `    ${s}`),
+    '',
+    `  볼륨 구조:`,
+    ...ARHA_VOLUMES.map(v => `    ${v.vol.padEnd(8)} ${v.name.padEnd(18)} — ${v.desc}`),
+    '',
+    D,
+  ].join('\n');
+
+  // ── ② 사용방법 ───────────────────────────────
+  const usageLines = [
+    `  🛠️  사용방법  —  MCP 툴 가이드`,
+    D,
+    '',
+    '  ARHA는 MCP 서버로 Claude에 연결되어 동작합니다.',
+    '  아래 툴을 상황에 맞게 사용하세요.',
+    '',
+    ...ARHA_TOOL_GUIDE.map(t => [
+      `  ${t.emoji} ${t.tool.padEnd(26)} [${t.category}]`,
+      `      ${t.oneLiner}`,
+      `      사용: ${t.usage}`,
+      `      예시: ${t.example}`,
+      ...('tip' in t ? [`      💡 ${t.tip}`] : []),
+      ...('stacks' in t && Array.isArray((t as any).stacks)
+        ? ((t as any).stacks as string[]).map((st: string) => `         • ${st}`)
+        : []),
+      '',
+    ].join('\n')),
+    d,
+    '  ⚡ 빠른 시작',
+    d,
+    '',
+    ...ARHA_QUICK_START.map(r => [
+      `  ${r.recipe}`,
+      ...r.steps.map(step => `      ${step}`),
+      `      💡 ${r.tip}`,
+      '',
+    ].join('\n')),
+    D,
+  ].join('\n');
+
+  // ── ③ 개념 사전 ──────────────────────────────
+  const glossaryLines = [
+    `  📚 개념 사전`,
+    D,
+    '',
+    ...ARHA_GLOSSARY.map(g =>
+      `  ${g.term.padEnd(14)}  ${g.desc}`
+    ),
+    '',
+    D,
+    '  Project ARHA · Hayul & HighSol · 2026',
+    '  궁금한 점이 생기면 언제든 arha_about 를 다시 불러주세요.',
+    D,
+  ].join('\n');
+
   return {
-    identity: {
-      name:        ARHA_IDENTITY.name,
-      fullName:    ARHA_IDENTITY.fullName,
-      version:     ARHA_IDENTITY.version,
-      tagline:     ARHA_IDENTITY.tagline,
-      definition:  ARHA_IDENTITY.definition,
-      coreInsight: ARHA_IDENTITY.coreInsight,
-      whyItMatters: ARHA_IDENTITY.whyItMatters,
-    },
+    // 사람이 읽는 포맷 텍스트 (Claude가 그대로 렌더링)
+    display: [introLines, usageLines, glossaryLines].join('\n'),
 
-    architecture: {
-      volumes:     ARHA_VOLUMES.map(v => `${v.vol}  ${v.name} — ${v.desc}`),
-      systemStack: ARHA_IDENTITY.systemStack,
-      pyramid:     ARHA_IDENTITY.pyramid,
-    },
-
-    howToUse: {
-      introduction:
-        'ARHA는 MCP 서버로 Claude(또는 호환 클라이언트)에 연결되어 동작합니다. ' +
-        '아래 9개 툴을 순서에 따라 사용하세요.',
-
-      tools: ARHA_TOOL_GUIDE.map(t => ({
-        tool:     `${t.emoji} ${t.tool}`,
+    // 구조화 데이터 (프로그래매틱 접근용 — 기존 호환)
+    _data: {
+      identity: {
+        name:        ARHA_IDENTITY.name,
+        fullName:    ARHA_IDENTITY.fullName,
+        version:     ARHA_IDENTITY.version,
+        tagline:     ARHA_IDENTITY.tagline,
+      },
+      volumes: ARHA_VOLUMES.map(v => ({ vol: v.vol, name: v.name, desc: v.desc })),
+      tools:   ARHA_TOOL_GUIDE.map(t => ({
+        tool:     t.tool,
         category: t.category,
         summary:  t.oneLiner,
-        usage:    t.usage,
         example:  t.example,
-        ...('tip' in t ? { tip: t.tip } : {}),
-        ...('stacks' in t ? { stacks: t.stacks } : {}),
       })),
+      quickStart: ARHA_QUICK_START.map(r => ({ recipe: r.recipe, steps: r.steps })),
+      glossary:   ARHA_GLOSSARY.map(g => ({ term: g.term, desc: g.desc })),
     },
-
-    quickStart: ARHA_QUICK_START.map(r => ({
-      recipe: r.recipe,
-      steps:  r.steps,
-      tip:    r.tip,
-    })),
-
-    glossary: ARHA_GLOSSARY.map(g => `${g.term.padEnd(16)} — ${g.desc}`),
-
-    footer: [
-      '─────────────────────────────────────────',
-      'Project ARHA · Hayul & HighSol · 2026',
-      'GitHub: ceo-hue/hisol-ai-agent',
-      '─────────────────────────────────────────',
-      '궁금한 게 있으면 언제든 arha_about 를 다시 불러주세요.',
-    ].join('\n'),
   };
 }

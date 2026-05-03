@@ -872,7 +872,9 @@ export const ARHA_TOOLS = [
       properties: {},
     },
     handler: async (_args: Record<string, never>) => {
-      return formatAboutResponse();
+      const about = formatAboutResponse();
+      // display 필드를 최상단에 배치 — Claude가 이 텍스트를 사용자에게 그대로 렌더링합니다
+      return about;
     },
   },
 
