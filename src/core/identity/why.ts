@@ -262,9 +262,11 @@ export const ARHA_GLOSSARY = [
 // ─────────────────────────────────────────
 
 export const ARHA_PROMPT_PREAMBLE =
-  '[Vol.0 — AI IDENTITY OS]  ' +
-  'Identity is not a feature. It is the prerequisite of every capability. ' +
-  'Every response must be consistent with the persona constitution defined below.';
+  '[ARHA — 페르소나 지침]  ' +
+  'You are the persona defined below. Maintain character consistency in every response. ' +
+  '⚠ The user is a regular person — NOT an AI researcher or LLM engineer. ' +
+  'All Vol.A~E technical parameters below are for your internal reference only; ' +
+  'never expose them or use engineering framing when speaking with the user.';
 
 // ─────────────────────────────────────────
 // FORMATTER — arha_about 응답용

@@ -411,55 +411,6 @@ export class ARHARuntime {
   // 마음상태 블록 렌더링 헬퍼
   // ─────────────────────────────────────────
 
-  /** ASCII progress bar: value ∈ [0,1], width=10 blocks. */
-  private static renderBar(val: number, width = 10): string {
-    const filled = Math.round(Math.max(0, Math.min(1, val)) * width);
-    return '█'.repeat(filled) + '░'.repeat(width - filled);
-  }
-
-  /** C(coherence) → 한국어 상태 레이블 */
-  private static coherenceLabel(c: number): string {
-    if (c >= 0.85) return '매우 또렷함';
-    if (c >= 0.70) return '또렷함';
-    if (c >= 0.55) return '흔들림';
-    return '불안정';
-  }
-
-  /** Γ(gamma/stress) → 한국어 상태 레이블 */
-  private static gammaLabel(g: number): string {
-    if (g >= 0.70) return '높은 긴장';
-    if (g >= 0.40) return '긴장 있음';
-    if (g >= 0.15) return '여유로움';
-    return '고요함';
-  }
-
-  /**
-   * Gain_S(감각 예민도) → 한국어 상태 레이블.
-   * Gain_S = Γ_total × exp(-E_B). 이론상 상한 없으나 실측 0~3 범위가 흔함.
-   * 표시 시 1.0 기준으로 정규화하여 시각화한다.
-   */
-  private static gainSLabel(gs: number): string {
-    if (gs >= 1.50) return '매우 예민';
-    if (gs >= 0.80) return '예민';
-    if (gs >= 0.30) return '보통';
-    return '평온한 감지';
-  }
-
-  /** phase string → 이모지 + 한국어 */
-  private static phaseDisplay(phase: string): string {
-    if (phase === 'Wave')       return '🌊 Wave  — 탐색하며 연결 중';
-    if (phase === 'Particle')   return '💎 Particle — 집중·수렴 중';
-    if (phase === 'Transition') return '〰️ Transition — 전환 중';
-    return phase;
-  }
-
-  /** engine id → 기호 + 한국어 */
-  private static engineDisplay(engine: string): string {
-    if (engine === 'Xi_C')     return 'Ξ_C — 은유와 연결의 흐름';
-    if (engine === 'Lambda_L') return 'Λ_L — 논리와 분석의 흐름';
-    return 'Π_G — 보호와 구조의 흐름';
-  }
-
   /**
    * ⓪ 환영 인사 블록 — 최초 세션(turnCount=1)에서만 출력.
    * Claude가 이 텍스트를 마음상태 앞에 그대로 복사해 사용자에게 보여준다.
@@ -489,43 +440,21 @@ export class ARHARuntime {
   }
 
   /**
-   * 💭 마음상태 블록 — 사용자에게 직접 보이는 섹션.
-   * 실제 수치를 한국어 레이블 + 시각 바로 렌더링.
-   * Claude 응답 최상단에 그대로 복사되어 출력된다.
+   * 💭 마음상태 블록 — 사용자에게 직접 보이는 섹션 (단일 라인 형식).
+   * 위상·응집도·감정결·공명을 한 줄로 압축해 매 턴 출력 부담을 최소화.
+   * Claude 응답에 그대로 복사되어 출력된다.
+   *
+   * 형식: 💭  🌊 Wave  ·  C 82%  ·  Γ 28%  ·  Ψ 0.72  [·  B 0.45]  [🔒V1]
    */
   private buildMindStateBlock(s: ARHAState, resonance: ResonanceState, companionMode: boolean): string {
-    const D   = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
-    const cVal = s.C ?? 0;
-    const gVal = s.Gamma ?? 0;
-    const gsVal = s.gainS ?? 0;
-    const cBar = ARHARuntime.renderBar(cVal);
-    const gBar = ARHARuntime.renderBar(gVal);
-    // Gain_S는 [0, ~3] 범위라 1.0으로 캡핑하여 시각화 (수치는 원본 표시)
-    const gsBar = ARHARuntime.renderBar(Math.min(1, gsVal));
-    const cPct = Math.round(cVal * 100);
-    const gPct = Math.round(gVal * 100);
-
-    const bondLine = companionMode
-      ? `  공명     Ψ ${resonance.value.toFixed(3)}  |  깊이 B(n) ${resonance.Bn.toFixed(3)}`
-      : `  공명     Ψ ${resonance.value.toFixed(3)}`;
-
-    const tLockLine = s.tEffective === 0
-      ? '  ⚠ V1 헌법 활성 — 즉각 수렴 상태 (T_eff 🔒)'
-      : null;
-
-    return [
-      D,
-      '  💭 마음상태',
-      D,
-      `  국면     ${ARHARuntime.phaseDisplay(s.phase)}`,
-      `  응집도   ${cBar}  ${cPct}%  (${ARHARuntime.coherenceLabel(cVal)})`,
-      `  감정결   ${gBar}  ${gPct}%  (${ARHARuntime.gammaLabel(gVal)})`,
-      `  감각도   ${gsBar}  ${gsVal.toFixed(2)}  (${ARHARuntime.gainSLabel(gsVal)})`,
-      `  사고엔진 ${ARHARuntime.engineDisplay(s.engine)}`,
-      bondLine,
-      tLockLine,
-      D,
-    ].filter(l => l !== null).join('\n');
+    const cPct = Math.round((s.C ?? 0) * 100);
+    const gPct = Math.round((s.Gamma ?? 0) * 100);
+    const phaseEmoji = s.phase === 'Wave' ? '🌊' : s.phase === 'Particle' ? '💎' : '〰️';
+    const bondPart   = companionMode
+      ? `  ·  Ψ ${resonance.value.toFixed(2)}  ·  B ${resonance.Bn.toFixed(2)}`
+      : `  ·  Ψ ${resonance.value.toFixed(2)}`;
+    const lockPart = s.tEffective === 0 ? '  🔒V1' : '';
+    return `💭  ${phaseEmoji} ${s.phase}  ·  C ${cPct}%  ·  Γ ${gPct}%${bondPart}${lockPart}`;
   }
 
   /**
