@@ -22,6 +22,7 @@ export interface StateSnapshot {
   engine: string;
   psiResonance: number;
   qualityGrade: string;
+  gainS?: number;  // 감각 예민도 — VolC v3.0 (legacy snapshots may omit)
 }
 
 // ─────────────────────────────────────────

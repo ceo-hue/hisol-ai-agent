@@ -22,6 +22,31 @@ import type { ARHAState } from './state.js';
 import type { ResonanceState } from '../cognition/resonance.js';
 import type { OutRenderSpec } from '../cognition/sensor-out.js';
 
+// ─────────────────────────────────────────
+// CONFIG — VolC v3.0 thermal cooling baseline
+// ─────────────────────────────────────────
+
+/**
+ * T_base — Particle 수렴 시 도달할 기준 온도.
+ * 의미: 페르소나가 "차분해진 후 머무는 평정 온도".
+ *   낮음(0.05) → 날카롭게 식음 (잡스 같은 단호한 페르소나에 적합)
+ *   기본(0.10) → 표준 평정
+ *   높음(0.20) → 따뜻하게 식음 (HighSol 같은 공감 페르소나에 적합)
+ *
+ * env: ARHA_T_BASE  default: 0.10  허용범위: [0, 0.40]
+ * 범위 밖이거나 NaN이면 default로 fallback (silent — boot 안정성 우선).
+ */
+const T_BASE_DEFAULT = 0.10;
+const T_BASE = (() => {
+  const raw = process.env.ARHA_T_BASE;
+  if (!raw) return T_BASE_DEFAULT;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 0.40) {
+    return T_BASE_DEFAULT;
+  }
+  return parsed;
+})();
+
 import { stageIN, updateBaseline } from '../cognition/sensor-in.js';
 import { stageChain } from '../identity/engine.js';
 import { stageDecide } from '../cognition/phase.js';
@@ -185,14 +210,16 @@ export function executeTurn(
   // E_B — binding energy: C²×ln(1+Γ_total)
   const EB = computeBindingEnergy(chainResult.C, gammaTotal);
 
-  // Gain_S — sensory gain (high stress, low E_B → heightened sensing)
-  // Computed here for future SRE→Ex pipeline integration; not yet stored in state.
-  const _gainS = computeGainS(gammaTotal, EB); // eslint-disable-line @typescript-eslint/no-unused-vars
+  // Gain_S — sensory gain: 스트레스 높고 결합 미완 시 감각 예민도 상승.
+  // E_B → ∞ 면 exp(-E_B) → 0 으로 평온한 감지.
+  // ARHAState에 저장되어 마음상태 블록의 4번째 지표로 노출된다.
+  const gainS = computeGainS(gammaTotal, EB);
 
-  // Thermal Cooling — Particle phase convergence: T_eff → T_base (0.10)
-  // Applied to the stored T_eff (next turn will inherit cooled temperature).
+  // Thermal Cooling — Particle phase convergence: T_eff → T_base (env-tunable)
+  // T_BASE 모듈 상수는 ARHA_T_BASE env에서 한 번 검증된 값.
+  // 페르소나별 차이가 필요하면 향후 persona.tBase override를 추가해 replace.
   const tEffectiveStored = (decideResult.state === 'Particle' && tEffective > 0)
-    ? computeThermalCooling(0.10, tEffective, EB)
+    ? computeThermalCooling(T_BASE, tEffective, EB)
     : tEffective;
 
   // Physics ρ/λ/τ — activated once E_B ≥ 0.1 (sufficient binding energy)
@@ -274,9 +301,10 @@ export function executeTurn(
     tEffective:   tEffectiveStored,  // ← thermally cooled in Particle phase
     pParticle:          decideResult.pParticle,
     sustainedHighGamma,
-    // VolC v3.0 — binding energy & accumulated stress
+    // VolC v3.0 — binding energy & accumulated stress & sensory gain
     gammaTotal,
     EB,
+    gainS,
     // evolutionCount is updated by ARHARuntime after sigma_eureka, not here
   });
 

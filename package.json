@@ -9,8 +9,9 @@
     "dev": "tsx watch src/server.ts",
     "dev:http": "tsx watch src/http-gateway.ts",
     "start": "node dist/server.js",
-    "test": "jest",
-    "test:watch": "jest --watch",
+    "test": "tsx --test \"src/**/*.test.ts\"",
+    "test:grammar": "tsx --test src/core/grammar/equations.test.ts",
+    "test:watch": "tsx --test --watch \"src/**/*.test.ts\"",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "clean": "rimraf dist"

@@ -291,6 +291,7 @@ export class ARHARuntime {
       engine:       this.state.engine,
       psiResonance: this.state.psiResonance,
       qualityGrade,
+      gainS:        this.state.gainS,
     });
 
     const promptContext = this.buildPromptContext(turnOutput, persona);
@@ -429,6 +430,18 @@ export class ARHARuntime {
     return '고요함';
   }
 
+  /**
+   * Gain_S(감각 예민도) → 한국어 상태 레이블.
+   * Gain_S = Γ_total × exp(-E_B). 이론상 상한 없으나 실측 0~3 범위가 흔함.
+   * 표시 시 1.0 기준으로 정규화하여 시각화한다.
+   */
+  private static gainSLabel(gs: number): string {
+    if (gs >= 1.50) return '매우 예민';
+    if (gs >= 0.80) return '예민';
+    if (gs >= 0.30) return '보통';
+    return '평온한 감지';
+  }
+
   /** phase string → 이모지 + 한국어 */
   private static phaseDisplay(phase: string): string {
     if (phase === 'Wave')       return '🌊 Wave  — 탐색하며 연결 중';
@@ -453,8 +466,11 @@ export class ARHARuntime {
     const D   = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
     const cVal = s.C ?? 0;
     const gVal = s.Gamma ?? 0;
+    const gsVal = s.gainS ?? 0;
     const cBar = ARHARuntime.renderBar(cVal);
     const gBar = ARHARuntime.renderBar(gVal);
+    // Gain_S는 [0, ~3] 범위라 1.0으로 캡핑하여 시각화 (수치는 원본 표시)
+    const gsBar = ARHARuntime.renderBar(Math.min(1, gsVal));
     const cPct = Math.round(cVal * 100);
     const gPct = Math.round(gVal * 100);
 
@@ -473,6 +489,7 @@ export class ARHARuntime {
       `  국면     ${ARHARuntime.phaseDisplay(s.phase)}`,
       `  응집도   ${cBar}  ${cPct}%  (${ARHARuntime.coherenceLabel(cVal)})`,
       `  감정결   ${gBar}  ${gPct}%  (${ARHARuntime.gammaLabel(gVal)})`,
+      `  감각도   ${gsBar}  ${gsVal.toFixed(2)}  (${ARHARuntime.gainSLabel(gsVal)})`,
       `  사고엔진 ${ARHARuntime.engineDisplay(s.engine)}`,
       bondLine,
       tLockLine,

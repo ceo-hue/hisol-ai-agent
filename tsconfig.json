@@ -23,6 +23,7 @@
     "node_modules",
     "dist",
     "tests",
-    "src/_legacy"
+    "src/_legacy",
+    "src/**/*.test.ts"
   ]
 }

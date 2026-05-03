@@ -16,9 +16,15 @@
  *                          짧고 안전한 메시지만 노출.
  */
 
-// MUST be at the very top — before any other import that might log.
+// Runtime-level safety net (secondary layer).
+// Primary layer: dist/mcp/preload.cjs loaded via node --require flag BEFORE any module.
+// ESM note: static `import` is hoisted above all module code, so this redirect
+// executes AFTER all imported modules initialize. The --require preloader is the
+// only reliable way to patch console before ESM module graph evaluation.
+// This line still catches any console.log added to handler functions at runtime.
 console.log  = console.error;
 console.info = console.error;
+console.warn = console.error;
 
 import 'dotenv/config';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
