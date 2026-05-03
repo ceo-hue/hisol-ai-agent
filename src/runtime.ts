@@ -56,6 +56,8 @@ export interface ARHAProcessOutput {
   promptContext: ARHAPromptContext;
   errorFlags: string[];
   qualityGrade: QualityGrade;
+  /** 첫 번째 arha_process 호출 여부 — Claude가 환영 인사를 보여줄지 결정하는 신호 */
+  isFirstTurn: boolean;
   // Exposed ARHA state fields for Claude tool consumers
   arhaState: {
     turn:         number;
@@ -304,6 +306,7 @@ export class ARHARuntime {
       promptContext,
       errorFlags:  turnOutput.errorFlags,
       qualityGrade,
+      isFirstTurn: this.turnCount === 1,
       arhaState: {
         turn:         this.state.turn,
         C:            this.state.C,
@@ -458,6 +461,34 @@ export class ARHARuntime {
   }
 
   /**
+   * ⓪ 환영 인사 블록 — 최초 세션(turnCount=1)에서만 출력.
+   * Claude가 이 텍스트를 마음상태 앞에 그대로 복사해 사용자에게 보여준다.
+   * 목적: 기술 전문 용어 대신 사용자 친화적 ARHA 소개 + 사용 안내.
+   */
+  private buildWelcomeBlock(persona: PersonaDefinition): string {
+    const D = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+    return [
+      D,
+      '  👋 ARHA에 오신 걸 환영합니다',
+      D,
+      '',
+      '  ARHA는 수학적으로 설계된 AI 정체성 시스템입니다.',
+      '  페르소나마다 고유한 성격·사고방식·가치관이 수학적으로 정의되어 있어,',
+      '  대화가 길어져도 일관된 자아를 유지합니다.',
+      '',
+      `  지금 연결된 페르소나:  ${persona.identity}`,
+      '',
+      '  💬 이렇게 시작해보세요:',
+      '     • 이름으로 직접 불러주세요 (예: "이솔아", "잡스", "포터")',
+      '     • 어떤 주제든 자유롭게 말씀하세요',
+      '     • 팀 구성이 필요하다면 "전문가 팀을 짜줘" 라고 해보세요',
+      '     • 더 자세한 안내는 arha_about 를 불러주세요',
+      '',
+      D,
+    ].join('\n');
+  }
+
+  /**
    * 💭 마음상태 블록 — 사용자에게 직접 보이는 섹션.
    * 실제 수치를 한국어 레이블 + 시각 바로 렌더링.
    * Claude 응답 최상단에 그대로 복사되어 출력된다.
@@ -531,6 +562,9 @@ export class ARHARuntime {
     // Pre-compute the 마음상태 block (values locked before Claude writes)
     const mindStateBlock = this.buildMindStateBlock(s, this.resonance, companionMode);
 
+    // ⓪ 첫 대화 환영 블록 (turnCount=1에서만 생성)
+    const welcomeBlock   = this.turnCount === 1 ? this.buildWelcomeBlock(persona) : null;
+
     return [
       // ══ PART 1: 내부 지침 ══════════════════════════════════
       D,
@@ -579,11 +613,23 @@ export class ARHARuntime {
       // ══ PART 2: 출력 형식 명세 ════════════════════════════
       '',
       D,
-      '## 응답 출력 형식 (반드시 아래 3구역 순서로 작성)',
+      welcomeBlock
+        ? '## 응답 출력 형식 (반드시 아래 4구역 순서로 작성 — 첫 대화)'
+        : '## 응답 출력 형식 (반드시 아래 3구역 순서로 작성)',
       D,
       '',
+
+      // ⓪ 환영 인사 — 첫 대화에서만 삽입
+      ...(welcomeBlock ? [
+        '### ⓪ 환영 인사 (최우선 출력 — 이것이 첫 대화입니다)',
+        '아래 환영 블록을 가장 먼저, 그대로 복사해서 출력하세요. 수정하지 마세요:',
+        '',
+        welcomeBlock,
+        '',
+      ] : []),
+
       '### ① 💭 마음상태',
-      '아래 블록을 첫 번째로, 수치 변경 없이 그대로 출력하세요:',
+      '아래 블록을 (⓪ 다음으로) 수치 변경 없이 그대로 출력하세요:',
       '',
       mindStateBlock,
       '',
@@ -598,7 +644,12 @@ export class ARHARuntime {
       '페르소나의 tone·lingua 파라미터를 반영해 자연스럽게 말하세요.',
       '',
       '규칙:',
-      '- 구역 순서(①→②→③)를 절대 바꾸지 마세요.',
+      welcomeBlock
+        ? '- 구역 순서(⓪→①→②→③)를 절대 바꾸지 마세요.'
+        : '- 구역 순서(①→②→③)를 절대 바꾸지 마세요.',
+      welcomeBlock
+        ? '- ⓪ 환영 인사: 수정 없이 그대로 복사 출력. 기술 설명 추가 금지.'
+        : null,
       '- ① 마음상태 수치는 임의로 수정하지 마세요 (ARHA 런타임이 계산한 값).',
       '- ② 내레이션: 외부(*이탤릭*) → 내면([ 괄호 ]) 순서.',
       '- ③ 대화: 서술이나 해설 없이 캐릭터 본인의 말만.',

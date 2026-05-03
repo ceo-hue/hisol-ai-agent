@@ -121,8 +121,9 @@ export const ARHA_TOOLS = [
           } : null,
           volGLayer: result.volGLayer,
           // System prompt (structured Vol.A~F~G format)
-          systemPrompt: runtime.buildStructuredSystemPrompt(result),
-          sessionId:    sid,
+          systemPrompt:  runtime.buildStructuredSystemPrompt(result),
+          isFirstTurn:   result.isFirstTurn,
+          sessionId:     sid,
         };
       });
     }),
