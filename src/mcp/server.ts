@@ -114,8 +114,10 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   }
 
   try {
+    // tool.handler is typed as ToolHandler: (args: unknown) => Promise<unknown>
+    // No casting needed — input validation handled inside the handler via defineHandler.
     const result = await withTimeout(
-      Promise.resolve((tool.handler as Function)(args ?? {})),
+      Promise.resolve(tool.handler(args ?? {})),
       HANDLER_TIMEOUT_MS,
       name,
     );

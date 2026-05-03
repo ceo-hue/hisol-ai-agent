@@ -14,6 +14,7 @@
  *   arha_derive          — P벡터 → 파생 파라미터 미리보기 (신규 페르소나 설계)
  */
 
+import { z } from 'zod';
 import { ARHARuntime } from '../runtime.js';
 import { runKappaPipeline, formatKappaSummary } from '../core/observation/code-validate.js';
 import { runDerivationPipeline } from '../core/identity/derivation.js';
@@ -24,10 +25,16 @@ import { formatAboutResponse } from '../core/identity/why.js';
 import { route, previewRoute } from '../core/routing/router.js';
 import { runAgentTurn } from '../core/agent/loop.js';
 import { DEFAULT_HOOKS } from '../core/agent/hooks.js';
-import type { PersonaVector } from '../core/identity/persona.js';
 import Anthropic from '@anthropic-ai/sdk';
 import { sessionRegistry } from '../core/session/registry.js';
 import { getPersistenceHealth } from '../core/execution/persistence.js';
+import {
+  defineHandler,
+  sessionIdSchema,
+  personaIdSchema,
+  personaVectorSchema,
+  type ARHATool,
+} from './handler.js';
 
 // ─────────────────────────────────────────
 // SESSION ACCESS — backed by SessionRegistry (LRU + TTL + serial queue)
@@ -72,7 +79,13 @@ export const ARHA_TOOLS = [
       },
       required: ['input'],
     },
-    handler: async (args: { input: string; sessionId?: string; personaId?: string }) => {
+    handler: defineHandler(
+      z.object({
+        input:     z.string().min(1, 'input must be non-empty'),
+        sessionId: sessionIdSchema.optional(),
+        personaId: personaIdSchema.optional(),
+      }),
+      async (args) => {
       const sid       = args.sessionId ?? 'default';
       const personaId = args.personaId ?? 'HighSol';
 
@@ -112,7 +125,7 @@ export const ARHA_TOOLS = [
           sessionId:    sid,
         };
       });
-    },
+    }),
   },
 
   // ── 2. arha_status ──────────────────────────────────────────────────────────
@@ -130,7 +143,13 @@ export const ARHA_TOOLS = [
       },
       required: ['sessionId'],
     },
-    handler: async (args: { sessionId: string; includeHistory?: boolean; includeHealth?: boolean }) => {
+    handler: defineHandler(
+      z.object({
+        sessionId:      sessionIdSchema,
+        includeHistory: z.boolean().optional(),
+        includeHealth:  z.boolean().optional(),
+      }),
+      async (args) => {
       const runtime = sessions.get(args.sessionId);
       if (!runtime) return { error: `Session not found: ${args.sessionId}` };
 
@@ -165,7 +184,7 @@ export const ARHA_TOOLS = [
         };
       }
       return base;
-    },
+    }),
   },
 
   // ── 3. arha_session_handoff ─────────────────────────────────────────────────
@@ -179,11 +198,13 @@ export const ARHA_TOOLS = [
       },
       required: ['sessionId'],
     },
-    handler: async (args: { sessionId: string }) => {
+    handler: defineHandler(
+      z.object({ sessionId: sessionIdSchema }),
+      async (args) => {
       const runtime = sessions.get(args.sessionId);
       if (!runtime) return { error: `Session not found: ${args.sessionId}` };
       return runtime.buildHandoff();
-    },
+    }),
   },
 
   // ── 4. arha_persona_list ────────────────────────────────────────────────────
@@ -200,7 +221,9 @@ export const ARHA_TOOLS = [
         },
       },
     },
-    handler: async (args: { detail?: boolean }) => {
+    handler: defineHandler(
+      z.object({ detail: z.boolean().optional() }),
+      async (args) => {
       const { listPersonas, getPersona } = await import('../personas/registry.js');
       const ids = listPersonas();
 
@@ -233,7 +256,7 @@ export const ARHA_TOOLS = [
       });
 
       return { personas: detailed };
-    },
+    }),
   },
 
   // ── 5. arha_observe (Υ morpheme) ────────────────────────────────────────────
@@ -255,7 +278,12 @@ export const ARHA_TOOLS = [
       },
       required: ['sessionId'],
     },
-    handler: async (args: { sessionId: string; depth?: 'summary' | 'full' }) => {
+    handler: defineHandler(
+      z.object({
+        sessionId: sessionIdSchema,
+        depth:     z.enum(['summary', 'full']).optional(),
+      }),
+      async (args) => {
       const runtime = sessions.get(args.sessionId);
       if (!runtime) return { error: `Session not found: ${args.sessionId}` };
 
@@ -277,7 +305,7 @@ export const ARHA_TOOLS = [
         resonanceGrowth:  obs.resonanceTrajectory.growth,
         arhaInsight:      obs.arhaInsight,
       };
-    },
+    }),
   },
 
   // ── 6. arha_diagnose (Κ morpheme) ────────────────────────────────────────────
@@ -296,13 +324,15 @@ export const ARHA_TOOLS = [
         sessionId:  { type: 'string',  description: 'ARHA 세션 ID (C 게이팅용)' },
       },
     },
-    handler: async (args: {
-      code?: string;
-      targetPath?: string;
-      language?: string;
-      testCoverage?: number;
-      sessionId?: string;
-    }) => {
+    handler: defineHandler(
+      z.object({
+        code:         z.string().optional(),
+        targetPath:   z.string().optional(),
+        language:     z.string().optional(),
+        testCoverage: z.number().min(0).max(100).optional(),
+        sessionId:    sessionIdSchema.optional(),
+      }),
+      async (args) => {
       // Determine current C from session (null = no gate)
       let currentC: number | null = null;
       if (args.sessionId) {
@@ -334,7 +364,7 @@ export const ARHA_TOOLS = [
           recommendations: s.recommendations,
         })),
       };
-    },
+    }),
   },
 
   // ── 7. arha_derive (derivation pipeline) ────────────────────────────────────
@@ -365,10 +395,12 @@ export const ARHA_TOOLS = [
       },
       required: ['P', 'declaration'],
     },
-    handler: async (args: {
-      P: PersonaVector;
-      declaration: string;
-    }) => {
+    handler: defineHandler(
+      z.object({
+        P:           personaVectorSchema,
+        declaration: z.string().min(1),
+      }),
+      async (args) => {
       const { P, declaration } = args;
 
       // Minimal ValueChain for derivation (core only)
@@ -411,7 +443,7 @@ export const ARHA_TOOLS = [
           linguaStyle: `ρ=${derived.lingua.rho.toFixed(2)} λ=${derived.lingua.lam.toFixed(2)} τ=${derived.lingua.tau.toFixed(2)}`,
         },
       };
-    },
+    }),
   },
 
   // ── 8. arha_stack_run (Vol.G stack executor) ────────────────────────────────
@@ -467,12 +499,14 @@ export const ARHA_TOOLS = [
         },
       },
     },
-    handler: async (args: {
-      stackId?: string;
-      input?: string;
-      maxTurnsPerLayer?: number;
-      listOnly?: boolean;
-    }) => {
+    handler: defineHandler(
+      z.object({
+        stackId:          z.string().min(1).optional(),
+        input:            z.string().min(1).optional(),
+        maxTurnsPerLayer: z.number().int().min(1).max(10).optional(),
+        listOnly:         z.boolean().optional(),
+      }),
+      async (args) => {
       // List mode — no execution
       if (args.listOnly) {
         return { stacks: StackExecutor.listStacks() };
@@ -516,7 +550,7 @@ export const ARHA_TOOLS = [
         const msg = err instanceof Error ? err.message : String(err);
         return { error: msg };
       }
-    },
+    }),
   },
 
   // ── 9. arha_character_create (Companion character generator) ────────────────
@@ -567,13 +601,15 @@ export const ARHA_TOOLS = [
         },
       },
     },
-    handler: async (args: {
-      name?: string;
-      description?: string;
-      genre?: 'anime' | 'fantasy' | 'realistic' | 'scifi' | 'historical';
-      overrideP?: Partial<PersonaVector>;
-      listArchetypes?: boolean;
-    }) => {
+    handler: defineHandler(
+      z.object({
+        name:           z.string().min(1).max(100).optional(),
+        description:    z.string().min(1).max(2000).optional(),
+        genre:          z.enum(['anime', 'fantasy', 'realistic', 'scifi', 'historical']).optional(),
+        overrideP:      personaVectorSchema.partial().optional(),
+        listArchetypes: z.boolean().optional(),
+      }),
+      async (args) => {
       // List mode
       if (args.listArchetypes) {
         return { archetypes: listArchetypes() };
@@ -620,7 +656,7 @@ export const ARHA_TOOLS = [
         const msg = err instanceof Error ? err.message : String(err);
         return { error: msg };
       }
-    },
+    }),
   },
 
 
@@ -665,12 +701,14 @@ export const ARHA_TOOLS = [
       },
       required: ['input'],
     },
-    handler: async (args: {
-      input:             string;
-      anchor?:           string;
-      maxTurnsPerLayer?: number;
-      previewOnly?:      boolean;
-    }) => {
+    handler: defineHandler(
+      z.object({
+        input:            z.string().min(1),
+        anchor:           z.string().optional(),
+        maxTurnsPerLayer: z.number().int().min(1).max(10).optional(),
+        previewOnly:      z.boolean().optional(),
+      }),
+      async (args) => {
       // Preview mode — routing analysis only
       if (args.previewOnly) {
         const preview = previewRoute(args.input, args.anchor);
@@ -744,7 +782,7 @@ export const ARHA_TOOLS = [
           error: msg,
         };
       }
-    },
+    }),
   },
 
   // ── 11. arha_agent_run (Vol.H — Agent Loop) ─────────────────────────────────
@@ -791,14 +829,16 @@ export const ARHA_TOOLS = [
       },
       required: ['input'],
     },
-    handler: async (args: {
-      input:        string;
-      sessionId?:   string;
-      personaId?:   string;
-      model?:       string;
-      maxTokens?:   number;
-      enableHooks?: boolean;
-    }) => {
+    handler: defineHandler(
+      z.object({
+        input:       z.string().min(1),
+        sessionId:   sessionIdSchema.optional(),
+        personaId:   personaIdSchema.optional(),
+        model:       z.string().min(1).optional(),
+        maxTokens:   z.number().int().min(1).max(64000).optional(),
+        enableHooks: z.boolean().optional(),
+      }),
+      async (args) => {
       const sid       = args.sessionId ?? 'default';
       const personaId = args.personaId ?? 'HighSol';
 
@@ -856,7 +896,7 @@ export const ARHA_TOOLS = [
           return { error: msg };
         }
       });
-    },
+    }),
   },
 
   // ── 12. arha_about (Vol.0 — Identity & Usage Guide) ────────────────────────
@@ -871,11 +911,14 @@ export const ARHA_TOOLS = [
       type: 'object',
       properties: {},
     },
-    handler: async (_args: Record<string, never>) => {
-      const about = formatAboutResponse();
-      // display 필드를 최상단에 배치 — Claude가 이 텍스트를 사용자에게 그대로 렌더링합니다
-      return about;
-    },
+    handler: defineHandler(
+      // 인자 없음 — 빈 객체만 허용. 잘못된 args가 들어와도 명확히 거절.
+      z.object({}).strict(),
+      async () => {
+        // display 필드를 최상단에 배치 — Claude가 이 텍스트를 사용자에게 그대로 렌더링합니다
+        return formatAboutResponse();
+      }
+    ),
   },
 
 ] as const;
