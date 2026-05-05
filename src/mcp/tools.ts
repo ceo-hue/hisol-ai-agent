@@ -900,7 +900,106 @@ export const ARHA_TOOLS = [
     }),
   },
 
-  // ── 12. arha_about (Vol.0 — Identity & Usage Guide) ────────────────────────
+  // ── 12. arha_vc_run (Vol.F_VC — 6-Phase Value Chain Pipeline) ──────────────
+  {
+    name: 'arha_vc_run',
+    description:
+      'Vol.F_VC: Run the universal 6-phase value chain pipeline (P1 SENSING → P2 SYNTHESIS → ' +
+      'P3 TRANSFORMATION → P4 DEPLOYMENT → P5 INTERACTION → P6 EVOLUTION) with a persona lens applied. ' +
+      'Each phase produces a quality score; gate failures block downstream phases. ' +
+      'Returns vc_total (0-1), grade (senior/professional/junior), per-phase scores, and a trail of phase markers. ' +
+      'Use this to verify whether a persona\'s output meets senior-level value conditions.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        personaId: {
+          type: 'string',
+          description: 'Persona lens to apply (e.g., "jobs"). Run arha_vc_lenses to list available lenses.',
+        },
+        text: {
+          type: 'string',
+          description: 'The input text to evaluate through the pipeline',
+        },
+        context: {
+          type: 'string',
+          description: 'Optional project/conversation context',
+        },
+      },
+      required: ['personaId', 'text'],
+    },
+    handler: defineHandler(
+      z.object({
+        personaId: z.string().min(1),
+        text:      z.string().min(1),
+        context:   z.string().optional(),
+      }),
+      async (args) => {
+        const { getLens, runVCPipeline, listLenses } = await import('../core/vc/index.js');
+        const lens = getLens(args.personaId.toLowerCase());
+        if (!lens) {
+          return {
+            error: `No lens registered for persona "${args.personaId}".`,
+            available: listLenses(),
+          };
+        }
+        const result = await runVCPipeline(lens, {
+          text: args.text,
+          context: args.context,
+        });
+        return {
+          persona_id: result.persona_id,
+          persona_name: lens.persona_meta.name,
+          vc_total: Number(result.vc_total.toFixed(3)),
+          grade: result.grade,
+          output_permitted: result.output_permitted,
+          constitutional_blocked: result.constitutional_blocked,
+          phase_results: result.phase_results.map(r => ({
+            phase: r.phase,
+            metric_name: r.metric_name,
+            score: Number(r.score.toFixed(3)),
+            passed: r.passed,
+            blocks_triggered: r.blocks_triggered,
+          })),
+          trail: result.trail,
+        };
+      },
+    ),
+  },
+
+  // ── 13. arha_vc_lenses (Vol.F_VC — Available Persona Lenses) ───────────────
+  {
+    name: 'arha_vc_lenses',
+    description:
+      'Vol.F_VC: List all registered persona lenses available for the value chain pipeline. ' +
+      'Returns persona_id, name, V1_core, and constitutional_law for each. ' +
+      'Use this before arha_vc_run to discover which personas have lens configurations.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+    handler: defineHandler(
+      z.object({}).strict(),
+      async () => {
+        const { listLenses, getLens } = await import('../core/vc/index.js');
+        const ids = listLenses();
+        return {
+          count: ids.length,
+          lenses: ids.map(id => {
+            const lens = getLens(id)!;
+            return {
+              persona_id: lens.persona_meta.persona_id,
+              name: lens.persona_meta.name,
+              v1_core: lens.persona_meta.v1_core,
+              constitutional_law: lens.persona_meta.constitutional_law,
+              dominant_engine: lens.persona_meta.dominant_engine,
+            };
+          }),
+        };
+      },
+    ),
+  },
+
+  // ── 14. arha_about (Vol.0 — Identity & Usage Guide) ────────────────────────
   {
     name: 'arha_about',
     description:
