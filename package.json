@@ -1,6 +1,6 @@
 {
   "name": "hisol-unified-mcp",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "HiSol 통합 MCP 서버 - ARHA 감정 언어체계 기반 실용적 AI 시스템",
   "main": "dist/server.js",
   "type": "module",
