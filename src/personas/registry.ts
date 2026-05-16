@@ -1,56 +1,36 @@
 /**
- * Persona Registry — all registered personas and their skill trees.
+ * Persona registry.
  */
+import { Persona } from '../am/types.js';
+import Diana from './diana.js';
+import { ALL_MASTERS } from './masters.js';
 
-import type { PersonaDefinition } from '../core/identity/persona.js';
-import type { SkillNode } from '../core/skill/node.js';
-import { HIGHSOL, HIGHSOL_SKILLS } from './highsol.js';
-import { GAUDI, GAUDI_SKILLS } from './gaudi.js';
-import { JOBS, JOBS_SKILLS } from './jobs.js';
-import { TSCHICHOLD, TSCHICHOLD_SKILLS } from './tschichold.js';
-import { OGILVY, OGILVY_SKILLS } from './ogilvy.js';
-import { RAMS, RAMS_SKILLS } from './rams.js';
-import { PORTER, PORTER_SKILLS } from './porter.js';
-import { DAVINCI, DAVINCI_SKILLS } from './davinci.js';
-import { EAMES, EAMES_SKILLS } from './eames.js';
-import { DRUCKER, DRUCKER_SKILLS } from './drucker.js';
-import { DEMING, DEMING_SKILLS } from './deming.js';
-import { OHNO, OHNO_SKILLS } from './ohno.js';
+const REGISTRY = new Map<string, Persona>();
 
-export interface PersonaEntry {
-  persona: PersonaDefinition;
-  skills: SkillNode[];
+function register(p: Persona) { REGISTRY.set(p.id, p); }
+
+register(Diana);
+for (const m of ALL_MASTERS) register(m);
+
+export function getPersona(id: string): Persona {
+  return REGISTRY.get(id) ?? REGISTRY.get('highsol')!;
 }
 
-const registry = new Map<string, PersonaEntry>();
-
-// Vol.G layer order: pre_foundation → foundation → specialist → expression
-// Anchor personas (canLead=true): Jobs, Porter, Drucker
-// Output Team specialists: Tschichold, Gaudi, Ogilvy, Rams, DaVinci, Eames
-// Process Team specialists: Deming (quality), Ohno (lean/flow)
-registry.set('HighSol',    { persona: HIGHSOL,    skills: HIGHSOL_SKILLS });
-registry.set('Jobs',       { persona: JOBS,       skills: JOBS_SKILLS });
-registry.set('Porter',     { persona: PORTER,     skills: PORTER_SKILLS });
-registry.set('Drucker',    { persona: DRUCKER,    skills: DRUCKER_SKILLS });
-registry.set('Deming',     { persona: DEMING,     skills: DEMING_SKILLS });
-registry.set('Ohno',       { persona: OHNO,       skills: OHNO_SKILLS });
-registry.set('Tschichold', { persona: TSCHICHOLD, skills: TSCHICHOLD_SKILLS });
-registry.set('Gaudi',      { persona: GAUDI,      skills: GAUDI_SKILLS });
-registry.set('Ogilvy',     { persona: OGILVY,     skills: OGILVY_SKILLS });
-registry.set('Rams',       { persona: RAMS,       skills: RAMS_SKILLS });
-registry.set('DaVinci',    { persona: DAVINCI,    skills: DAVINCI_SKILLS });
-registry.set('Eames',      { persona: EAMES,      skills: EAMES_SKILLS });
-
-export function getPersona(id: string): PersonaEntry | undefined {
-  return registry.get(id);
+export function listPersonas(): Array<{ id: string; displayName: string; domain: string }> {
+  return [...REGISTRY.values()].map(p => ({
+    id: p.id, displayName: p.displayName, domain: p.domain,
+  }));
 }
 
-export function listPersonas(): string[] {
-  return [...registry.keys()];
+export function resolvePersonaByTrigger(text: string): Persona | null {
+  const lower = text.toLowerCase();
+  for (const p of REGISTRY.values()) {
+    for (const t of p.triggers) {
+      if (lower.includes(t.toLowerCase()) || text.includes(t)) return p;
+    }
+  }
+  return null;
 }
 
-export function registerPersona(id: string, entry: PersonaEntry): void {
-  registry.set(id, entry);
-}
-
-export { HIGHSOL, JOBS, PORTER, DRUCKER, DEMING, OHNO, TSCHICHOLD, GAUDI, OGILVY, RAMS, DAVINCI, EAMES };
+export { Diana, ALL_MASTERS };
+export default REGISTRY;

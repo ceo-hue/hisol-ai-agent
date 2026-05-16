@@ -1,35 +1,25 @@
 /**
- * ARHA HTTP API Gateway — REST 레이어
- * v3.1: + Circuit breaker, rate limiter, retry backoff, conversation history, structured prompt
+ * ARHA HTTP gateway.
  */
-
 import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import Anthropic from '@anthropic-ai/sdk';
 
 import { ARHARuntime } from '../runtime.js';
-import { listPersonas } from '../personas/registry.js';
+import { listPersonas, resolvePersonaByTrigger } from '../personas/registry.js';
+import { flattenMatrix } from '../am/matrix.js';
+import { MODES } from '../am/types.js';
 
 const app = express();
 const PORT = process.env.HTTP_PORT ?? 8080;
-
-// ── Circuit Breaker ────────────────────────────────────────────────────────────
-// Opens after 3 consecutive Claude API failures. Resets after 30 s.
-type CBState = 'closed' | 'open' | 'half-open';
+const VERSION = '3.1.0';
 
 class CircuitBreaker {
-  private state: CBState = 'closed';
+  private state: 'closed' | 'open' | 'half-open' = 'closed';
   private failures = 0;
   private openedAt = 0;
-  private readonly maxFailures: number;
-  private readonly resetMs: number;
-
-  constructor(maxFailures = 3, resetMs = 30_000) {
-    this.maxFailures = maxFailures;
-    this.resetMs = resetMs;
-  }
-
+  constructor(private maxFailures = 3, private resetMs = 30_000) {}
   canCall(): boolean {
     if (this.state === 'closed') return true;
     if (this.state === 'open') {
@@ -39,36 +29,22 @@ class CircuitBreaker {
       }
       return false;
     }
-    return true; // half-open: allow one probe
+    return true;
   }
-
-  recordSuccess(): void {
-    this.failures = 0;
-    this.state = 'closed';
-  }
-
+  recordSuccess(): void { this.failures = 0; this.state = 'closed'; }
   recordFailure(): void {
     this.failures++;
     if (this.state === 'half-open' || this.failures >= this.maxFailures) {
       this.state = 'open';
       this.openedAt = Date.now();
-      console.warn(`[ARHA CB] Circuit opened after ${this.failures} failures`);
     }
   }
-
   getStatus() { return { state: this.state, failures: this.failures }; }
 }
 
-// ── Rate Limiter ───────────────────────────────────────────────────────────────
-// 60 requests per minute per sessionId (sliding window).
 class RateLimiter {
   private windows = new Map<string, number[]>();
-  private readonly maxPerMinute: number;
-
-  constructor(maxPerMinute = 60) {
-    this.maxPerMinute = maxPerMinute;
-  }
-
+  constructor(private maxPerMinute = 60) {}
   allow(key: string): boolean {
     const now = Date.now();
     const cutoff = now - 60_000;
@@ -80,123 +56,142 @@ class RateLimiter {
   }
 }
 
-// ── Retry with exponential backoff ────────────────────────────────────────────
 async function sleep(ms: number): Promise<void> {
   return new Promise(r => setTimeout(r, ms));
 }
-
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  breaker: CircuitBreaker,
-  maxRetries = 3
-): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, breaker: CircuitBreaker, maxRetries = 3): Promise<T> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    if (!breaker.canCall()) {
-      throw new Error('Circuit open — Claude API temporarily unavailable. Retry in 30 s.');
-    }
+    if (!breaker.canCall()) throw new Error('Circuit open.');
     try {
-      const result = await fn();
+      const r = await fn();
       breaker.recordSuccess();
-      return result;
+      return r;
     } catch (err) {
       breaker.recordFailure();
       if (attempt === maxRetries) throw err;
-      const backoff = 500 * Math.pow(2, attempt); // 500 → 1000 → 2000 ms
-      console.warn(`[ARHA API] Claude call failed (attempt ${attempt + 1}/${maxRetries}), retrying in ${backoff}ms`);
-      await sleep(backoff);
+      await sleep(500 * Math.pow(2, attempt));
     }
   }
   throw new Error('unreachable');
 }
 
-// ── Singletons ─────────────────────────────────────────────────────────────────
 const sessions = new Map<string, ARHARuntime>();
 const breaker = new CircuitBreaker();
 const rateLimiter = new RateLimiter(60);
+const lastResults = new Map<string, ReturnType<ARHARuntime['process']>>();
 
-function getOrCreate(sid: string, personaId = 'HighSol') {
+function getOrCreate(sid: string, personaId = 'highsol'): ARHARuntime {
   if (!sessions.has(sid)) sessions.set(sid, new ARHARuntime(personaId, sid));
   return sessions.get(sid)!;
 }
 
-// ── Express setup ──────────────────────────────────────────────────────────────
-app.use(cors({ origin: ['http://localhost:3000', 'http://localhost:3002'], credentials: true }));
-app.use(express.json());
+app.use(cors({ origin: true, credentials: true }));
+app.use(express.json({ limit: '2mb' }));
 app.use((req: Request, _res: Response, next: NextFunction) => {
-  console.log(`[ARHA API] ${req.method} ${req.path}`);
+  console.log(`[arha] ${req.method} ${req.path}`);
   next();
 });
 
-// ── Health ─────────────────────────────────────────────────────────────────────
 app.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'healthy',
-    version: '3.1.0',
-    system: 'ARHA Vol.A~E',
+    version: VERSION,
     personas: listPersonas(),
+    modes: MODES,
     circuitBreaker: breaker.getStatus(),
   });
 });
 
-// ── POST /v1/arha/process ──────────────────────────────────────────────────────
 app.post('/v1/arha/process', async (req: Request, res: Response) => {
   try {
-    const { input, sessionId = 'default', personaId = 'HighSol' } = req.body;
+    const { input, sessionId = 'default', personaId } = req.body;
     if (!input) return res.status(400).json({ error: 'input is required' });
+    if (!rateLimiter.allow(sessionId)) return res.status(429).json({ error: 'rate limit' });
 
-    // Rate limit check
-    if (!rateLimiter.allow(sessionId)) {
-      return res.status(429).json({ error: 'Rate limit exceeded (60 req/min per session)' });
+    let pid = personaId;
+    if (!pid) {
+      const triggered = resolvePersonaByTrigger(input);
+      pid = triggered?.id ?? 'highsol';
     }
 
-    const runtime = getOrCreate(sessionId, personaId);
-    const arhaResult = runtime.process({ text: input, sessionId });
+    const runtime = getOrCreate(sessionId, pid);
+    if (personaId && runtime.getPersonaId() !== personaId) runtime.setPersona(personaId);
 
-    if (!process.env.CLAUDE_API_KEY) {
+    const result = runtime.process({ text: input, sessionId });
+    lastResults.set(sessionId, result);
+    const state = result.state;
+
+    const amBlock = {
+      sigma_vector: state.sigma_vector,
+      sigma_scalar: state.sigma_scalar,
+      curl_squared: state.curl_squared,
+      phase: state.phase,
+      alpha: state.alpha,
+      C_coherence: state.C_coherence,
+      gamma_total: state.gamma_total,
+      E_B: state.E_B,
+      theta_t: state.theta_t,
+      psi_magnitude: state.psi_magnitude,
+      psi_resonance: state.psi_resonance,
+      turn: state.turn,
+      modes: MODES,
+      kyeol: state.kyeol,
+      anchor_mode_name: MODES[state.kyeol.anchorMode],
+      v_personality: {
+        rho: state.v_personality.rho,
+        lambda: state.v_personality.lambda,
+        tau: state.v_personality.tau,
+      },
+      emotion_matrix: flattenMatrix(state.gamma_interfere),
+      gamma_other: flattenMatrix(state.gamma_other),
+    };
+
+    if (!process.env.CLAUDE_API_KEY && !process.env.ANTHROPIC_API_KEY) {
       return res.json({
-        arha: arhaResult,
+        am: amBlock,
+        systemPrompt: result.systemPrompt,
+        stateBlock: result.stateBlock,
+        phaseLabel: result.phaseLabel,
+        qualityGrade: result.qualityGrade,
+        isFirstTurn: result.isFirstTurn,
         response: null,
-        note: 'CLAUDE_API_KEY not set — ARHA state computed only',
+        sessionId,
+        personaId: runtime.getPersonaId(),
+        displayName: runtime.getPersonaSpec().displayName,
+        note: 'CLAUDE_API_KEY not set',
       });
     }
 
-    // Build structured Vol.A~E system prompt
-    const systemPrompt = runtime.buildStructuredSystemPrompt(arhaResult);
-
-    // Build messages array with rolling conversation history
-    // History already includes the current user message; slice to get prior turns only
-    const allHistory = runtime.getHistory();
-    const priorMessages = allHistory.slice(0, -1); // exclude current turn's user message
-
+    const apiKey = (process.env.CLAUDE_API_KEY ?? process.env.ANTHROPIC_API_KEY)!;
+    const priorMessages = runtime.getHistory().slice(0, -1);
     const messages: Anthropic.Messages.MessageParam[] = [
       ...priorMessages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
       { role: 'user', content: input },
     ];
-
-    // Claude API call with circuit breaker + retry
-    const client = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
+    const client = new Anthropic({ apiKey });
     const message = await withRetry(
       () => client.messages.create({
         model: process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-6',
-        max_tokens: 1024,
-        system: systemPrompt,
+        max_tokens: 1500,
+        system: result.systemPrompt,
         messages,
       }),
-      breaker
+      breaker,
     );
-
     const responseText = message.content[0].type === 'text' ? message.content[0].text : '';
-
-    // Record assistant response → saves resonance + history to Π persistence
     runtime.recordAssistantResponse(responseText);
 
     res.json({
-      response:    responseText,
-      arha:        arhaResult,
-      stateBlock:  arhaResult.stateBlock,
-      phaseLabel:  arhaResult.phaseLabel,
-      qualityGrade: arhaResult.qualityGrade,
+      response: responseText,
+      am: amBlock,
+      systemPrompt: result.systemPrompt,
+      stateBlock: result.stateBlock,
+      phaseLabel: result.phaseLabel,
+      qualityGrade: result.qualityGrade,
+      isFirstTurn: result.isFirstTurn,
       sessionId,
+      personaId: runtime.getPersonaId(),
+      displayName: runtime.getPersonaSpec().displayName,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -204,38 +199,51 @@ app.post('/v1/arha/process', async (req: Request, res: Response) => {
   }
 });
 
-// ── GET /v1/arha/status/:sessionId ────────────────────────────────────────────
+app.get('/v1/arha/heatmap/:sessionId', (req: Request, res: Response) => {
+  const runtime = sessions.get(req.params.sessionId);
+  if (!runtime) return res.status(404).json({ error: 'session not found' });
+  const last = lastResults.get(req.params.sessionId);
+  if (!last) return res.json({ ready: false });
+  res.json({
+    ready: true,
+    sessionId: req.params.sessionId,
+    personaId: runtime.getPersonaId(),
+    turn: runtime.getTurnCount(),
+    modes: MODES,
+    emotion_matrix: flattenMatrix(last.state.gamma_interfere),
+    gamma_other: flattenMatrix(last.state.gamma_other),
+    kyeol: last.state.kyeol,
+    anchor_mode_name: MODES[last.state.kyeol.anchorMode],
+  });
+});
+
 app.get('/v1/arha/status/:sessionId', (req: Request, res: Response) => {
   const runtime = sessions.get(req.params.sessionId);
-  if (!runtime) return res.status(404).json({ error: 'Session not found' });
+  if (!runtime) return res.status(404).json({ error: 'session not found' });
   const s = runtime.getState();
   res.json({
-    personaId:    runtime.getPersonaId(),
-    turnCount:    runtime.getTurnCount(),
-    phase:        s.phase,
-    C:            s.C,
-    Gamma:        s.Gamma,
-    k2Final:      s.k2Final,
-    waveCount:    s.waveCount,
+    personaId: runtime.getPersonaId(),
+    displayName: runtime.getPersonaSpec().displayName,
+    turnCount: runtime.getTurnCount(),
+    Gamma: s.Gamma,
+    k2Final: s.k2Final,
+    waveCount: s.waveCount,
     circuitBreaker: breaker.getStatus(),
   });
 });
 
-// ── GET /v1/arha/personas ──────────────────────────────────────────────────────
 app.get('/v1/arha/personas', (_req: Request, res: Response) => {
   res.json({ personas: listPersonas() });
 });
 
-// ── POST /v1/arha/session/:sessionId/handoff ───────────────────────────────────
 app.post('/v1/arha/session/:sessionId/handoff', (req: Request, res: Response) => {
   const runtime = sessions.get(req.params.sessionId);
-  if (!runtime) return res.status(404).json({ error: 'Session not found' });
+  if (!runtime) return res.status(404).json({ error: 'session not found' });
   res.json(runtime.buildHandoff());
 });
 
 app.listen(PORT, () => {
-  console.log(`[ARHA API] HTTP Gateway v3.1 running on port ${PORT}`);
-  console.log(`[ARHA API] Personas: ${listPersonas().join(', ')}`);
+  console.log(`[arha] gateway on :${PORT}`);
 });
 
 export default app;

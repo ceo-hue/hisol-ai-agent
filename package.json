@@ -1,7 +1,7 @@
 {
   "name": "hisol-unified-mcp",
-  "version": "2.1.0",
-  "description": "HiSol 통합 MCP 서버 - ARHA 감정 언어체계 기반 실용적 AI 시스템",
+  "version": "3.1.0",
+  "description": "ARHA runtime — 10-mode emotion matrix engine with persona registry",
   "main": "dist/server.js",
   "type": "module",
   "bin": {
@@ -17,9 +17,8 @@
     "dev": "tsx watch src/server.ts",
     "dev:http": "tsx watch src/http-gateway.ts",
     "start": "node dist/server.js",
-    "test": "tsx --test \"src/**/*.test.ts\"",
-    "test:grammar": "tsx --test src/core/grammar/equations.test.ts",
-    "test:watch": "tsx --test --watch \"src/**/*.test.ts\"",
+    "test": "tsx --test \"src/am/**/*.test.ts\"",
+    "test:watch": "tsx --test --watch \"src/am/**/*.test.ts\"",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "clean": "rimraf dist"
@@ -27,11 +26,13 @@
   "keywords": [
     "hisol",
     "arha",
+    "am",
+    "artificial-mind",
     "mcp",
     "emotion-intelligence",
     "ai-system",
-    "unified-server",
-    "practical-ai"
+    "two-mind-interference",
+    "gamma-matrix"
   ],
   "author": "HiSol AI Team",
   "license": "MIT",
@@ -43,19 +44,15 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
-    "natural": "^6.12.0",
     "typescript": "^5.3.3",
     "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.11",
     "@types/node": "^20.10.6",
     "@typescript-eslint/eslint-plugin": "^6.17.0",
     "@typescript-eslint/parser": "^6.17.0",
     "eslint": "^8.56.0",
-    "jest": "^29.7.0",
     "rimraf": "^5.0.5",
-    "ts-jest": "^29.1.1",
     "tsx": "^4.7.0"
   },
   "engines": {

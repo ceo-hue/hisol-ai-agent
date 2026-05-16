@@ -1,1026 +1,347 @@
 /**
- * ARHA MCP Tools — Vol.A~E 체계 기반 도구 정의
- *
- * 7개 툴:
- *  기존 4개 (보강):
- *   arha_process         — 메인 파이프라인 (ARHA state 구조체 직접 노출)
- *   arha_status          — 세션 STATE + Ψ_Resonance + 스냅샷 이력
- *   arha_session_handoff — Wave/Particle 핸드오프
- *   arha_persona_list    — 등록 페르소나 목록
- *
- *  신규 3개:
- *   arha_observe         — Υ 관찰층: C/Γ/phase 추세 분석 (세션 전체)
- *   arha_diagnose        — Κ 진단층: C ≥ 0.70 게이팅된 코드 품질 검증
- *   arha_derive          — P벡터 → 파생 파라미터 미리보기 (신규 페르소나 설계)
+ * ARHA MCP tool implementations.
  */
-
-import { z } from 'zod';
 import { ARHARuntime } from '../runtime.js';
-import { runKappaPipeline, formatKappaSummary } from '../core/observation/code-validate.js';
-import { runDerivationPipeline } from '../core/identity/derivation.js';
-import { StackExecutor } from '../core/orchestration/executor.js';
-import { generateCharacterPersona, listArchetypes } from '../core/companion/generator.js';
-import { registerPersona } from '../personas/registry.js';
-import { formatAboutResponse } from '../core/identity/why.js';
-import { route, previewRoute } from '../core/routing/router.js';
-import { runAgentTurn } from '../core/agent/loop.js';
-import { DEFAULT_HOOKS } from '../core/agent/hooks.js';
-import Anthropic from '@anthropic-ai/sdk';
-import { sessionRegistry } from '../core/session/registry.js';
-import { getPersistenceHealth } from '../core/execution/persistence.js';
-import {
-  defineHandler,
-  sessionIdSchema,
-  personaIdSchema,
-  personaVectorSchema,
-  type ARHATool,
-} from './handler.js';
+import { listPersonas, getPersona, resolvePersonaByTrigger } from '../personas/registry.js';
+import { MODES } from '../am/types.js';
+import { flattenMatrix } from '../am/matrix.js';
 
-// ─────────────────────────────────────────
-// SESSION ACCESS — backed by SessionRegistry (LRU + TTL + serial queue)
-// ─────────────────────────────────────────
+const sessions = new Map<string, ARHARuntime>();
+const lastResults = new Map<string, ReturnType<ARHARuntime['process']>>();
 
-/** Mutating access path: touches LRU, creates if missing. */
-function getOrCreateRuntime(sessionId: string, personaId = 'HighSol'): ARHARuntime {
-  return sessionRegistry.get(sessionId, personaId);
+function getRuntime(sessionId: string, personaId?: string): ARHARuntime {
+  if (!sessions.has(sessionId)) sessions.set(sessionId, new ARHARuntime(personaId ?? 'highsol', sessionId));
+  const r = sessions.get(sessionId)!;
+  if (personaId && r.getPersonaId() !== personaId) r.setPersona(personaId);
+  return r;
 }
 
-/**
- * Read-only access — returns undefined if session not in RAM.
- * Does NOT auto-create; mirrors the old `sessions.get()` semantics so
- * existence-check handlers (arha_status, arha_session_handoff) keep
- * their "session must exist" contract instead of silently spawning fresh
- * runtimes that would mask client bugs.
- */
-const sessions = {
-  get: (sessionId: string): ARHARuntime | undefined => sessionRegistry.peek(sessionId),
-};
+export function arha_process(args: { text: string; sessionId?: string; personaId?: string }) {
+  const sid = args.sessionId ?? 'default';
+  let pid = args.personaId;
+  if (!pid) {
+    const t = resolvePersonaByTrigger(args.text);
+    pid = t?.id ?? 'highsol';
+  }
+  const r = getRuntime(sid, pid);
+  const result = r.process({ text: args.text, sessionId: sid });
+  lastResults.set(sid, result);
 
-// ─────────────────────────────────────────
-// TOOL DEFINITIONS
-// ─────────────────────────────────────────
-
-export const ARHA_TOOLS = [
-
-  // ── 1. arha_process ─────────────────────────────────────────────────────────
-  {
-    name: 'arha_process',
-    description:
-      'ARHA main pipeline — IN→ANALYZE→CHAIN→DECIDE→OUT. ' +
-      'Computes σ convergence, Wave/Particle phase, engine selection, C/Γ state. ' +
-      'Returns structured ARHA state + system prompt ready for Claude API injection. ' +
-      'Companion mode auto-detected from persona (relation≥0.70 or volGLayerType=companion).',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        input:     { type: 'string',  description: '사용자 입력 텍스트' },
-        sessionId: { type: 'string',  description: '세션 ID (없으면 "default")' },
-        personaId: { type: 'string',  description: '페르소나 ID (기본: HighSol)', default: 'HighSol' },
-      },
-      required: ['input'],
+  return {
+    response: null,
+    systemPrompt: result.systemPrompt,
+    stateBlock: result.stateBlock,
+    phaseLabel: result.phaseLabel,
+    qualityGrade: result.qualityGrade,
+    isFirstTurn: result.isFirstTurn,
+    sessionId: sid,
+    personaId: r.getPersonaId(),
+    displayName: r.getPersonaSpec().displayName,
+    state: {
+      sigma_vector: result.state.sigma_vector,
+      phase: result.state.phase,
+      E_B: result.state.E_B,
+      theta_t: result.state.theta_t,
+      C: result.state.C_coherence,
+      gamma_total: result.state.gamma_total,
+      anchor_mode: MODES[result.state.kyeol.anchorMode],
+      anchor_intensity: result.state.kyeol.anchorIntensity,
+      modes: MODES,
     },
-    handler: defineHandler(
-      z.object({
-        input:     z.string().min(1, 'input must be non-empty'),
-        sessionId: sessionIdSchema.optional(),
-        personaId: personaIdSchema.optional(),
-      }),
-      async (args) => {
-      const sid       = args.sessionId ?? 'default';
-      const personaId = args.personaId ?? 'HighSol';
+  };
+}
 
-      // Per-session serial queue — 같은 sessionId 동시 호출은 FIFO로 직렬화.
-      // Turn n과 Turn n+1이 겹쳐 실행되면 state·history·snapshots가 손상된다.
-      // "정신의 일관성" — 분열되지 않은 자아.
-      return sessionRegistry.runSerialized(sid, personaId, async (runtime) => {
-        const result = runtime.process({ text: args.input, sessionId: sid });
+export function arha_about(args: { personaId?: string }) {
+  if (args.personaId) {
+    const p = getPersona(args.personaId);
+    return {
+      display: [
+        `# ${p.displayName}`,
+        ``,
+        `Identity: ${p.identity}`,
+        ``,
+        `V1: ${p.V1_Value}`,
+        ``,
+        `P_5D: protect=${p.P_5D.protect} expand=${p.P_5D.expand} left=${p.P_5D.left} right=${p.P_5D.right} relation=${p.P_5D.relation}`,
+        ``,
+        `Domain: ${p.domain}`,
+        ``,
+        `Rules:`,
+        ...p.constitutional_rules.map(r => `- ${r}`),
+      ].join('\n'),
+      _data: { persona: p },
+    };
+  }
+  return {
+    display: [
+      '# ARHA Runtime',
+      '',
+      '## Modes',
+      MODES.map((m, i) => `${i}. ${m}`).join(' · '),
+      '',
+      '## Personas',
+      ...listPersonas().map(p => `- ${p.displayName} (\`${p.id}\`) — ${p.domain}`),
+      '',
+      '## Core Equations',
+      '- Γ_interfere = Γ_other ⊙ Γ_ARHA',
+      '- Ω = {(i,j) | Γ_interfere > θ_kyeol}',
+      '- E_B = min(α, C) × (1 + ln(1 + Γ_total))',
+      '- θ(t) = k² × (1 − E_B × 0.3)',
+      '- Ψ(u,t) = OUT ∘ COLLAPSE ∘ DECIDE ∘ CHAIN ∘ ANALYZE ∘ IN(u)',
+    ].join('\n'),
+    _data: { modes: MODES, personas: listPersonas() },
+  };
+}
 
-        return {
-          // Vol.D runtime state — structured fields for Claude
-          arhaState:    result.arhaState,
-          qualityGrade: result.qualityGrade,
-          stateBlock:   result.stateBlock,
-          phaseLabel:   result.phaseLabel,
-          errorFlags:   result.errorFlags,
-          // Vol.C output spec
-          tone:         result.outSpec.sigmaStyle.tone,
-          lingua: {
-            rho: result.outSpec.sigmaStyle.rhoFinal,
-            lam: result.outSpec.sigmaStyle.lamFinal,
-            tau: result.outSpec.sigmaStyle.tauFinal,
-          },
-          // Vol.E wave instruction (if active)
-          waveInstruction: result.promptContext.waveInstruction ?? null,
-          // Vol.F/G routing metadata
-          volF:      result.volF ? {
-            ref:             result.volF.ref,
-            status:          result.volF.status,
-            currentLayer:    result.volF.currentLayer,
-            completedLayers: result.volF.completedLayers,
-            outputArtifact:  result.volF.outputArtifact,
-          } : null,
-          volGLayer: result.volGLayer,
-          // System prompt (structured Vol.A~F~G format)
-          systemPrompt:  runtime.buildStructuredSystemPrompt(result),
-          isFirstTurn:   result.isFirstTurn,
-          sessionId:     sid,
-        };
-      });
-    }),
-  },
+export function arha_status(args: { sessionId?: string }) {
+  const sid = args.sessionId ?? 'default';
+  if (!sessions.has(sid)) return { error: 'session not found', sessionId: sid };
+  const r = sessions.get(sid)!;
+  const last = lastResults.get(sid);
+  return {
+    sessionId: sid,
+    personaId: r.getPersonaId(),
+    displayName: r.getPersonaSpec().displayName,
+    turnCount: r.getTurnCount(),
+    lastState: last?.state ? {
+      phase: last.state.phase,
+      C: last.state.C_coherence,
+      gamma_total: last.state.gamma_total,
+      E_B: last.state.E_B,
+      anchor_mode: MODES[last.state.kyeol.anchorMode],
+    } : null,
+  };
+}
 
-  // ── 2. arha_status ──────────────────────────────────────────────────────────
-  {
-    name: 'arha_status',
-    description:
-      'ARHA 세션 현재 STATE 블록 조회 + Ψ_Resonance + 최근 스냅샷 이력. ' +
-      'includeHealth:true 옵션으로 서버 운영 지표(메모리 세션 수, 영속화 성공/실패)도 함께 반환.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        sessionId:      { type: 'string' },
-        includeHistory: { type: 'boolean', description: '스냅샷 이력 포함 여부 (기본: false)' },
-        includeHealth:  { type: 'boolean', description: '서버 health 지표 포함 (기본: false)' },
-      },
-      required: ['sessionId'],
+export function arha_persona_list() {
+  return { personas: listPersonas() };
+}
+
+export function arha_session_handoff(args: { sessionId: string }) {
+  const r = sessions.get(args.sessionId);
+  if (!r) return { error: 'session not found' };
+  return r.buildHandoff();
+}
+
+export function arha_diagnose(args: { sessionId?: string }) {
+  const sid = args.sessionId ?? 'default';
+  const r = sessions.get(sid);
+  if (!r) return { error: 'session not found' };
+  const last = lastResults.get(sid);
+  if (!last) return { error: 'no result yet' };
+  const s = last.state;
+  return {
+    diagnosis: {
+      stress_level: s.gamma_total <= 0.3 ? 'green' : s.gamma_total <= 0.7 ? 'yellow' : 'red',
+      coherence_level: s.C_coherence >= 0.6 ? 'high' : s.C_coherence >= 0.3 ? 'medium' : 'low',
+      phase: s.phase,
+      bond_energy: s.E_B,
+      anchor_intensity: s.kyeol.anchorIntensity,
+      kyeol_cell_count: s.kyeol.cells.length,
     },
-    handler: defineHandler(
-      z.object({
-        sessionId:      sessionIdSchema,
-        includeHistory: z.boolean().optional(),
-        includeHealth:  z.boolean().optional(),
-      }),
-      async (args) => {
-      const runtime = sessions.get(args.sessionId);
-      if (!runtime) return { error: `Session not found: ${args.sessionId}` };
+    recommendations: buildRecommendations(s),
+  };
+}
 
-      const state     = runtime.getState();
-      const resonance = runtime.getResonance();
+function buildRecommendations(s: any): string[] {
+  const recs: string[] = [];
+  if (s.gamma_total > 0.7) recs.push('high stress — slow down, raise warmth mode');
+  if (s.C_coherence < 0.3) recs.push('low coherence — align with user pattern');
+  if (s.E_B < 0.3) recs.push('low bond energy — raise alpha (value alignment)');
+  if (s.phase === 'particle' && s.kyeol.anchorIntensity > 0.6) recs.push('strong particle — decisive emission possible');
+  if (recs.length === 0) recs.push('stable');
+  return recs;
+}
 
-      const base: Record<string, unknown> = {
-        personaId:    runtime.getPersonaId(),
-        turnCount:    runtime.getTurnCount(),
-        phase:        state.phase,
-        C:            state.C,
-        Gamma:        state.Gamma,
-        k2Final:      state.k2Final,
-        engine:       state.engine,
-        g:            state.g,
-        p:            state.p,
-        waveCount:    state.waveCount,
-        psiDiss:      state.psiDiss,
-        psiResonance: state.psiResonance,
-        resonance: {
-          n:     resonance.n,
-          value: resonance.value,
-          Bn:    resonance.Bn,
-        },
-      };
+export function arha_observe(args: { sessionId?: string }) {
+  const sid = args.sessionId ?? 'default';
+  const last = lastResults.get(sid);
+  if (!last) return { error: 'no result yet' };
+  const s = last.state;
+  return {
+    sigma_vector: s.sigma_vector.map((v, i) => ({ mode: MODES[i], value: v })),
+    V_in: s.V_in,
+    V_con: s.V_con,
+    curl_squared: s.curl_squared,
+  };
+}
 
-      if (args.includeHistory) base.snapshots = runtime.getSnapshots();
-      if (args.includeHealth) {
-        base._health = {
-          registry:    sessionRegistry.stats(),
-          persistence: getPersistenceHealth(),
-        };
-      }
-      return base;
-    }),
-  },
-
-  // ── 3. arha_session_handoff ─────────────────────────────────────────────────
-  {
-    name: 'arha_session_handoff',
-    description: 'ARHA 세션 핸드오프 — Wave/Particle 상태를 다음 세션으로 전달',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        sessionId: { type: 'string' },
-      },
-      required: ['sessionId'],
+export function arha_derive(args: { sessionId?: string }) {
+  const sid = args.sessionId ?? 'default';
+  const last = lastResults.get(sid);
+  if (!last) return { error: 'no result yet' };
+  const vp = last.state.v_personality;
+  return {
+    v_personality: {
+      rho: vp.rho,
+      lambda: vp.lambda,
+      tau: vp.tau,
+      principal_mode: MODES.reduce((acc, _m, i) =>
+        vp.matrix[i][i] > vp.matrix[acc][acc] ? i : acc, 0),
     },
-    handler: defineHandler(
-      z.object({ sessionId: sessionIdSchema }),
-      async (args) => {
-      const runtime = sessions.get(args.sessionId);
-      if (!runtime) return { error: `Session not found: ${args.sessionId}` };
-      return runtime.buildHandoff();
-    }),
-  },
+    alpha: last.state.alpha,
+    C: last.state.C_coherence,
+    E_B: last.state.E_B,
+  };
+}
 
-  // ── 4. arha_persona_list ────────────────────────────────────────────────────
-  {
-    name: 'arha_persona_list',
-    description: 'List all registered personas with Vol.F/G metadata. detail:true returns full P vector, lingua, engine, skill count.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        detail: {
-          type: 'boolean',
-          description: '상세 정보 포함 여부 (기본: false)',
-          default: false,
-        },
-      },
+export function arha_route(args: { request: string; sessionId?: string }) {
+  const persona = resolvePersonaByTrigger(args.request);
+  const text = args.request.toLowerCase();
+
+  const matches: Array<{ id: string; score: number; reason: string }> = [];
+  for (const p of listPersonas()) {
+    const def = getPersona(p.id);
+    let score = 0;
+    const reasons: string[] = [];
+    for (const trig of def.triggers) {
+      if (text.includes(trig.toLowerCase())) { score += 2; reasons.push(`trigger:${trig}`); }
+    }
+    for (const dom of def.domain.split('·').map(d => d.trim())) {
+      if (dom && text.includes(dom)) { score += 1; reasons.push(`domain:${dom}`); }
+    }
+    if (score > 0) matches.push({ id: p.id, score, reason: reasons.join(',') });
+  }
+
+  matches.sort((a, b) => b.score - a.score);
+  const layers = matches.slice(0, 3).map(m => ({
+    personaId: m.id,
+    displayName: getPersona(m.id).displayName,
+    score: m.score,
+    reason: m.reason,
+  }));
+
+  return {
+    triggered: persona ? { id: persona.id, displayName: persona.displayName } : null,
+    teamContext: {
+      complexity: Math.min(1, matches.length / 5),
+      geometry: layers.length >= 3 ? 'triangle+' : layers.length === 2 ? 'line' : 'point',
     },
-    handler: defineHandler(
-      z.object({ detail: z.boolean().optional() }),
-      async (args) => {
-      const { listPersonas, getPersona } = await import('../personas/registry.js');
-      const ids = listPersonas();
+    layers,
+  };
+}
 
-      if (!args.detail) {
-        return { personas: ids };
-      }
+export function arha_stack_run(args: { request: string; sessionId?: string; personaIds?: string[] }) {
+  const sid = args.sessionId ?? 'default';
+  const ids = args.personaIds ?? arha_route({ request: args.request, sessionId: sid }).layers.map(l => l.personaId);
+  const results: any[] = [];
+  for (const pid of ids) {
+    const r = getRuntime(sid + ':' + pid, pid);
+    const result = r.process({ text: args.request, sessionId: sid });
+    lastResults.set(sid + ':' + pid, result);
+    results.push({
+      personaId: pid,
+      displayName: r.getPersonaSpec().displayName,
+      systemPrompt: result.systemPrompt,
+      stateBlock: result.stateBlock,
+      phaseLabel: result.phaseLabel,
+    });
+  }
+  return { stack: results };
+}
 
-      const detailed = ids.map(id => {
-        const entry = getPersona(id);
-        if (!entry) return { id };
-        const { persona } = entry;
-        return {
-          id:               persona.id,
-          identity:         persona.identity,
-          volGLayerType:    persona.volGLayerType ?? null,
-          volFSkillRef:     persona.volFSkillRef ?? null,
-          dominantEngine:   persona.dominantEngineNote ?? null,
-          k2Persona:        persona.k2Persona,
-          wCore:            persona.weightStructure?.wCore ?? null,
-          P: {
-            protect:  persona.P.protect,
-            expand:   persona.P.expand,
-            left:     persona.P.left,
-            right:    persona.P.right,
-            relation: persona.P.relation,
-          },
-          lingua: persona.lingua,
-          skillCount: entry.skills.length,
-        };
-      });
+export function arha_agent_run(args: { personaId: string; text: string; sessionId?: string }) {
+  return arha_process({ text: args.text, sessionId: args.sessionId, personaId: args.personaId });
+}
 
-      return { personas: detailed };
-    }),
-  },
-
-  // ── 5. arha_observe (Υ morpheme) ────────────────────────────────────────────
-  {
-    name: 'arha_observe',
-    description:
-      'Υ observation layer — analyze full session C/Γ/phase/engine/Ψ_Res trends in ARHA terms. ' +
-      'Returns meaningful insight after 3+ turns. summary mode = narrative only; full = all metrics.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        sessionId: { type: 'string', description: '분석할 세션 ID' },
-        depth: {
-          type: 'string',
-          enum: ['summary', 'full'],
-          description: 'summary = Υ 내러티브만 / full = 모든 수치 포함 (기본: summary)',
-          default: 'summary',
-        },
-      },
-      required: ['sessionId'],
+export function arha_character_create(args: {
+  id: string;
+  displayName: string;
+  P_5D: { protect: number; expand: number; left: number; right: number; relation: number };
+  V1_Value: string;
+  triggers?: string[];
+}) {
+  return {
+    note: 'template only',
+    template: {
+      id: args.id,
+      displayName: args.displayName,
+      identity: `${args.displayName} — custom persona`,
+      P_5D: args.P_5D,
+      V1_Value: args.V1_Value,
+      triggers: args.triggers ?? [args.displayName],
     },
-    handler: defineHandler(
-      z.object({
-        sessionId: sessionIdSchema,
-        depth:     z.enum(['summary', 'full']).optional(),
-      }),
-      async (args) => {
-      const runtime = sessions.get(args.sessionId);
-      if (!runtime) return { error: `Session not found: ${args.sessionId}` };
+  };
+}
 
-      const obs = runtime.observe();
+export function arha_vc_run(args: { request: string; sessionId?: string }) {
+  const route = arha_route(args);
+  return {
+    pipeline: ['SENSE', 'SYNTH', 'TRANSFORM', 'DEPLOY', 'INTERACT', 'EVOLVE'],
+    layers: route.layers,
+  };
+}
 
-      if (args.depth === 'full') {
-        return obs;
-      }
+export function arha_vc_lenses() {
+  return {
+    lenses: listPersonas().map(p => ({ id: p.id, displayName: p.displayName, domain: p.domain })),
+  };
+}
 
-      // summary mode — key metrics + narrative
-      return {
-        sessionTurns:     obs.sessionTurns,
-        qualityProgression: obs.qualityProgression,
-        phaseLabel:       obs.phaseDistribution.label,
-        coherenceDir:     obs.coherenceTrend.direction,
-        coherenceMean:    parseFloat(obs.coherenceTrend.mean.toFixed(3)),
-        stressLabel:      obs.stressPattern.label,
-        dominantEngine:   obs.engineDistribution.dominant,
-        resonanceGrowth:  obs.resonanceTrajectory.growth,
-        arhaInsight:      obs.arhaInsight,
-      };
-    }),
-  },
+export function arha_emotion_matrix(args: { sessionId?: string }) {
+  const sid = args.sessionId ?? 'default';
+  const last = lastResults.get(sid);
+  if (!last) return { error: 'no result yet' };
+  return {
+    modes: MODES,
+    emotion_matrix: flattenMatrix(last.state.gamma_interfere),
+    gamma_other: flattenMatrix(last.state.gamma_other),
+    shape: [10, 10],
+  };
+}
 
-  // ── 6. arha_diagnose (Κ morpheme) ────────────────────────────────────────────
-  {
-    name: 'arha_diagnose',
-    description:
-      'Κ diagnosis layer — code quality validation gated by ARHA C ≥ 0.70 (4 stages: SPEC·QUALITY·SECURITY·STRUCTURE). ' +
-      'Returns gate response if coherence insufficient. Runs ungated when no sessionId provided.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        code:       { type: 'string',  description: '검증할 코드 문자열' },
-        targetPath: { type: 'string',  description: '파일 경로 (참고용)' },
-        language:   { type: 'string',  description: '언어 (typescript/javascript 등)', default: 'typescript' },
-        testCoverage: { type: 'number', description: '테스트 커버리지 % (0–100)' },
-        sessionId:  { type: 'string',  description: 'ARHA 세션 ID (C 게이팅용)' },
-      },
-    },
-    handler: defineHandler(
-      z.object({
-        code:         z.string().optional(),
-        targetPath:   z.string().optional(),
-        language:     z.string().optional(),
-        testCoverage: z.number().min(0).max(100).optional(),
-        sessionId:    sessionIdSchema.optional(),
-      }),
-      async (args) => {
-      // Determine current C from session (null = no gate)
-      let currentC: number | null = null;
-      if (args.sessionId) {
-        const runtime = sessions.get(args.sessionId);
-        if (runtime) currentC = runtime.getState().C;
-      }
+export function arha_kyeol_zones(args: { sessionId?: string }) {
+  const sid = args.sessionId ?? 'default';
+  const last = lastResults.get(sid);
+  if (!last) return { error: 'no result yet' };
+  const k = last.state.kyeol;
+  return {
+    cells: k.cells.map(c => ({
+      i: c.i,
+      j: c.j,
+      mode_i: MODES[c.i],
+      mode_j: MODES[c.j],
+      value: c.value,
+    })),
+    anchor_mode: MODES[k.anchorMode],
+    anchor_intensity: k.anchorIntensity,
+    coherence: last.state.C_coherence,
+  };
+}
 
-      const ctx = {
-        code:         args.code,
-        targetPath:   args.targetPath,
-        language:     args.language ?? 'typescript',
-        testCoverage: args.testCoverage,
-      };
+export function arha_bond_energy(args: { sessionId?: string }) {
+  const sid = args.sessionId ?? 'default';
+  const last = lastResults.get(sid);
+  if (!last) return { error: 'no result yet' };
+  return {
+    E_B: last.state.E_B,
+    alpha: last.state.alpha,
+    C: last.state.C_coherence,
+    gamma_total: last.state.gamma_total,
+    theta_t: last.state.theta_t,
+    psi_magnitude: last.state.psi_magnitude,
+    bottleneck: Math.min(last.state.alpha, last.state.C_coherence),
+  };
+}
 
-      const pipeline = runKappaPipeline(ctx, currentC);
-      const summary  = formatKappaSummary(pipeline);
+export const TOOLS = {
+  arha_process,
+  arha_about,
+  arha_status,
+  arha_persona_list,
+  arha_session_handoff,
+  arha_diagnose,
+  arha_observe,
+  arha_derive,
+  arha_route,
+  arha_stack_run,
+  arha_agent_run,
+  arha_character_create,
+  arha_vc_run,
+  arha_vc_lenses,
+  arha_emotion_matrix,
+  arha_kyeol_zones,
+  arha_bond_energy,
+} as const;
 
-      return {
-        summary,
-        grade:         pipeline.grade,
-        overallScore:  parseFloat(pipeline.overallScore.toFixed(3)),
-        overallStatus: pipeline.overallStatus,
-        arhaGate:      pipeline.arhaGate,
-        stages: pipeline.stages.map(s => ({
-          stage:           s.stage,
-          status:          s.status,
-          score:           parseFloat(s.score.toFixed(3)),
-          issues:          s.issues,
-          recommendations: s.recommendations,
-        })),
-      };
-    }),
-  },
-
-  // ── 7. arha_derive (derivation pipeline) ────────────────────────────────────
-  {
-    name: 'arha_derive',
-    description:
-      'P vector (5D persona constitution) → derived parameter preview. ' +
-      'Auto-computes ρλτ lingua, k², skill domain, narration style for new persona design.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        P: {
-          type: 'object',
-          description: '5D 페르소나 벡터 (각 축 0.0–1.0)',
-          properties: {
-            protect:  { type: 'number', description: '방어/개방 0=open 1=defensive' },
-            expand:   { type: 'number', description: '수렴/확장 0=convergent 1=exploratory' },
-            left:     { type: 'number', description: '직관/분석 0=intuitive 1=analytical' },
-            right:    { type: 'number', description: '명시/은유 0=explicit 1=metaphorical' },
-            relation: { type: 'number', description: '독립/공감 0=independent 1=empathic' },
-          },
-          required: ['protect', 'expand', 'left', 'right', 'relation'],
-        },
-        declaration: {
-          type: 'string',
-          description: 'V1_core 선언문 (e.g. "연결주의 — 모든 의미는 관계에서 생성된다")',
-        },
-      },
-      required: ['P', 'declaration'],
-    },
-    handler: defineHandler(
-      z.object({
-        P:           personaVectorSchema,
-        declaration: z.string().min(1),
-      }),
-      async (args) => {
-      const { P, declaration } = args;
-
-      // Minimal ValueChain for derivation (core only)
-      const mockValueChain = {
-        core: { declaration, phi: 0.8, omega: 0.8, kappa: 0.85, texture: 'Fluid_Wave' as any },
-        subs: [],
-        check: { declaration: '', epsilon: 0.5, delta: 0.5, thetaTrigger: 0.8 },
-        clarity: 0.8,
-      };
-
-      const derived = runDerivationPipeline(P, mockValueChain);
-
-      // Engine bias from P
-      const engineBias =
-        P.right >= P.left && P.right >= P.protect ? 'Ξ_C (은유·연결 우세)'
-        : P.left >= P.right && P.left >= P.protect ? 'Λ_L (분석·논리 우세)'
-        : 'Π_G (보호·구조 우세)';
-
-      // k² label
-      const k2Label =
-        derived.k2Persona < 0.65 ? '낮은 임계값 — 빠른 결정체화'
-        : derived.k2Persona > 0.80 ? '높은 임계값 — 충분한 탐색 후 결정체화'
-        : '중간 임계값';
-
-      return {
-        P,
-        derived: {
-          lingua: derived.lingua,
-          k2Persona: parseFloat(derived.k2Persona.toFixed(4)),
-          skillDomain: derived.skillParams.naturalDomain,
-          skillDepth:  parseFloat(derived.skillParams.depth.toFixed(3)),
-          skillBreadth: parseFloat(derived.skillParams.breadth.toFixed(3)),
-          narrationInternal: derived.narration.internalStyle,
-          narrationExternal: derived.narration.externalStyle,
-          constitutionalRule: derived.constitutionalRule,
-        },
-        preview: {
-          engineBias,
-          k2Label,
-          linguaStyle: `ρ=${derived.lingua.rho.toFixed(2)} λ=${derived.lingua.lam.toFixed(2)} τ=${derived.lingua.tau.toFixed(2)}`,
-        },
-      };
-    }),
-  },
-
-  // ── 8. arha_stack_run (Vol.G stack executor) ────────────────────────────────
-  {
-    name: 'arha_stack_run',
-    description:
-      'Vol.G stack execution — runs a multi-persona layer pipeline in strict order. ' +
-      'Each layer completes its Vol.F MetaSkill (PERCEPTION→SYNTHESIS) then passes a locked HandoffPackage downstream. ' +
-      'Returns composedPrompt usable directly as Claude API system prompt. ' +
-      'listOnly:true returns available stack definitions without executing.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        stackId: {
-          type: 'string',
-          description:
-            '실행할 스택 ID. ' +
-            '— Jobs anchor: ' +
-            'STACK_VISUAL_DESIGN_3 (Jobs→Tschichold→Gaudi) | ' +
-            'STACK_CONCEPT_DESIGN_2 (Jobs→Tschichold) | ' +
-            'STACK_SPACE_EXPERIENCE_3 (Jobs→Gaudi) | ' +
-            'STACK_BRAND_COPY_2 (Jobs→Ogilvy) | ' +
-            'STACK_PRODUCT_DESIGN_2 (Jobs→Rams) ' +
-            '— Porter anchor: ' +
-            'STACK_STRATEGY_2 (Porter→Rams) | ' +
-            'STACK_STRATEGY_3 (Porter→Ogilvy→Rams) ' +
-            '— Drucker anchor: ' +
-            'STACK_MANAGEMENT_2 (Drucker→Rams) | ' +
-            'STACK_MGT_BRAND_3 (Drucker→Ogilvy→Rams) | ' +
-            'STACK_QUALITY_2 (Drucker→Deming) | ' +
-            'STACK_PROCESS_3 (Drucker→Deming→Ohno) ' +
-            '— Jobs anchor (Phase 2): ' +
-            'STACK_EXPERIENCE_2 (Jobs→Eames) | ' +
-            'STACK_PRODUCT_EXP_3 (Jobs→Rams→Eames) | ' +
-            'STACK_INNOVATION_3 (Jobs→Rams→DaVinci) ' +
-            '— Cross-Team (Phase 5): ' +
-            'STACK_STRATEGY_MGMT_3 (Porter→Drucker→Rams) | ' +
-            'STACK_VISION_PROCESS_3 (Jobs→Drucker→Deming)',
-        },
-        input: {
-          type: 'string',
-          description: '스택 전체에 전달할 사용자 요청 (첫 레이어 입력)',
-        },
-        maxTurnsPerLayer: {
-          type: 'number',
-          description: '레이어당 최대 턴 수 (기본 3, 권장 2~4)',
-          default: 3,
-        },
-        listOnly: {
-          type: 'boolean',
-          description: '사용 가능한 스택 목록만 반환 (실행 없음)',
-          default: false,
-        },
-      },
-    },
-    handler: defineHandler(
-      z.object({
-        stackId:          z.string().min(1).optional(),
-        input:            z.string().min(1).optional(),
-        maxTurnsPerLayer: z.number().int().min(1).max(10).optional(),
-        listOnly:         z.boolean().optional(),
-      }),
-      async (args) => {
-      // List mode — no execution
-      if (args.listOnly) {
-        return { stacks: StackExecutor.listStacks() };
-      }
-
-      if (!args.stackId) return { error: 'stackId is required. Use listOnly:true to see available stacks.' };
-      if (!args.input)   return { error: 'input is required.' };
-
-      try {
-        const result = await StackExecutor.run(
-          args.stackId,
-          args.input,
-          { maxTurnsPerLayer: args.maxTurnsPerLayer ?? 3 },
-        );
-
-        return {
-          stackId:        result.stackId,
-          stackDesc:      result.stackDesc,
-          status:         result.status,
-          totalTurns:     result.totalTurns,
-          // Per-layer summary
-          layers: result.layers.map(lr => ({
-            personaId:    lr.personaId,
-            layerType:    lr.layerType,
-            artifactType: lr.artifactType,
-            turns:        lr.turns,
-            finalPhase:   lr.finalPhase,
-            finalC:       lr.finalC,
-            qualityGrade: lr.qualityGrade,
-            volFStatus:   lr.volFStatus,
-            // Artifact schema (Claude fills in actual content)
-            artifactSchema: lr.artifact.schema,
-            constraints:    lr.artifact.constraints,
-          })),
-          // HandoffPackage summary
-          immutableSpec:  result.handoffPackage.immutable_spec,
-          // Full composed system prompt — use directly as Claude system prompt
-          composedPrompt: result.composedPrompt,
-        };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return { error: msg };
-      }
-    }),
-  },
-
-  // ── 9. arha_character_create (Companion character generator) ────────────────
-  {
-    name: 'arha_character_create',
-    description:
-      'Generate a fully-specified companion persona from a natural-language character description. ' +
-      'Extracts trait keywords → computes P vector → selects archetype → builds V1 chain + companion skills. ' +
-      'Auto-registers the persona so it is immediately usable with arha_process. ' +
-      'listArchetypes:true returns available archetype presets without creating a character.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        name: {
-          type: 'string',
-          description: 'Character display name (e.g. "Ryusei", "Hana", "Zero")',
-        },
-        description: {
-          type: 'string',
-          description:
-            'Natural-language personality description. ' +
-            'Trait keywords are extracted automatically. ' +
-            'Examples: "cold protective ex-soldier who rarely smiles" · ' +
-            '"warm energetic girl who talks before thinking" · ' +
-            '"mysterious tsundere with a hidden soft side" · ' +
-            '"strict analytical mentor who only praises when earned"',
-        },
-        genre: {
-          type: 'string',
-          enum: ['anime', 'fantasy', 'realistic', 'scifi', 'historical'],
-          description: 'Optional genre flavor for narration style (default: anime)',
-        },
-        overrideP: {
-          type: 'object',
-          description: 'Optional: manually lock specific P vector values (0.0–1.0)',
-          properties: {
-            protect:  { type: 'number' },
-            expand:   { type: 'number' },
-            left:     { type: 'number' },
-            right:    { type: 'number' },
-            relation: { type: 'number' },
-          },
-        },
-        listArchetypes: {
-          type: 'boolean',
-          description: 'Return available archetype presets without creating a character',
-          default: false,
-        },
-      },
-    },
-    handler: defineHandler(
-      z.object({
-        name:           z.string().min(1).max(100).optional(),
-        description:    z.string().min(1).max(2000).optional(),
-        genre:          z.enum(['anime', 'fantasy', 'realistic', 'scifi', 'historical']).optional(),
-        overrideP:      personaVectorSchema.partial().optional(),
-        listArchetypes: z.boolean().optional(),
-      }),
-      async (args) => {
-      // List mode
-      if (args.listArchetypes) {
-        return { archetypes: listArchetypes() };
-      }
-
-      if (!args.name)        return { error: 'name is required.' };
-      if (!args.description) return { error: 'description is required.' };
-
-      try {
-        const result = generateCharacterPersona({
-          name:        args.name,
-          description: args.description,
-          genre:       args.genre ?? 'anime',
-          overrideP:   args.overrideP,
-        });
-
-        // Register persona in-memory for immediate use
-        registerPersona(result.personaId, {
-          persona: result.persona,
-          skills:  result.skills,
-        });
-
-        return {
-          personaId:    result.personaId,
-          registered:   true,
-          traitTags:    result.traitTags,
-          archetypeKey: result.archetypeKey,
-          P:            result.persona.P,
-          preview: {
-            identity:           result.preview.identity,
-            constitutionalRule: result.preview.constitutionalRule,
-            narrationInternal:  result.preview.narrationInternal,
-            narrationExternal:  result.preview.narrationExternal,
-            dominantEngine:     result.preview.dominantEngine,
-            k2Persona:          result.preview.k2Persona,
-            companionSkills:    result.skills.map(s => s.nodeId),
-          },
-          nextStep: `Use arha_process with personaId="${result.personaId}" to start chatting.`,
-          permanentRegistration:
-            'To make this character permanent, save the generated persona to ' +
-            `src/personas/${result.personaId.toLowerCase()}.ts and add to registry.ts.`,
-        };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return { error: msg };
-      }
-    }),
-  },
-
-
-  // ── 10. arha_route (Vol.R — Auto Router, B방향 Anchor Architecture) ─────────
-  {
-    name: 'arha_route',
-    description:
-      'Vol.R automatic persona router — B방향 anchor architecture. ' +
-      'Analyzes the request and assembles the best-fit persona stack around a team leader (anchor). ' +
-      'anchor: specify a canLead persona (e.g. "Jobs") to fix the team leader; omit for auto-selection. ' +
-      'Router scores only specialist candidates around the anchor — not the anchor itself. ' +
-      'Extracts 4-axis intent (조직·역할·핵심역량·캐릭터성격) for specialist matching. ' +
-      'previewOnly:true returns routing reasoning without executing. ' +
-      'On execution, runs the matched stack and returns composedPrompt for Claude API injection. ' +
-      'Available anchors: Jobs (product vision/meaning) | Porter (competitive strategy/positioning) | Drucker (management/MBO/org design). ' +
-      'Cross-team stacks automatically detected and flagged in teamContext.isCrossTeam.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        input: {
-          type: 'string',
-          description: '사용자 요청 — 한국어·영어 혼용 가능. 라우터가 자동으로 최적 스택 선택',
-        },
-        anchor: {
-          type: 'string',
-          description:
-            '팀 리더 페르소나 ID (선택). ' +
-            '지정 시 해당 페르소나가 스택의 첫 레이어(pre_foundation)로 고정됨. ' +
-            '미지정 시 요청 팀 감지 후 canLead=true 페르소나 중 최고 득점자가 자동 선택됨. ' +
-            'canLead 페르소나: Jobs (output) | Porter (output/strategy) | Drucker (process).',
-        },
-        maxTurnsPerLayer: {
-          type: 'number',
-          description: '레이어당 최대 턴 수 (기본: 3)',
-          default: 3,
-        },
-        previewOnly: {
-          type: 'boolean',
-          description: '라우팅 분석만 반환, 실행 없음 (기본: false)',
-          default: false,
-        },
-      },
-      required: ['input'],
-    },
-    handler: defineHandler(
-      z.object({
-        input:            z.string().min(1),
-        anchor:           z.string().optional(),
-        maxTurnsPerLayer: z.number().int().min(1).max(10).optional(),
-        previewOnly:      z.boolean().optional(),
-      }),
-      async (args) => {
-      // Preview mode — routing analysis only
-      if (args.previewOnly) {
-        const preview = previewRoute(args.input, args.anchor);
-        return {
-          mode:          'preview',
-          anchor:        preview.anchorId,
-          intent:        preview.intent,
-          source:        preview.source,
-          teamContext:   preview.teamContext,
-          reasoning:     preview.reasoning,
-          stackPreview:  preview.stackPreview,
-          topScores:     preview.scores.slice(0, 5).map(s => ({
-            personaId:         s.personaId,
-            totalScore:        s.totalScore,
-            competencyScore:   s.breakdown.competencyScore,
-            organizationScore: s.breakdown.organizationScore,
-          })),
-        };
-      }
-
-      // Execution mode — route + run
-      const routeResult = route(args.input, args.anchor);
-
-      try {
-        // predefined stack → StackExecutor.run(), dynamic stack → StackExecutor.runDef()
-        const execResult = routeResult.source === 'predefined'
-          ? await StackExecutor.run(
-              routeResult.stackDef.stackId,
-              args.input,
-              { maxTurnsPerLayer: args.maxTurnsPerLayer ?? 3 },
-            )
-          : await StackExecutor.runDef(
-              routeResult.stackDef,
-              args.input,
-              { maxTurnsPerLayer: args.maxTurnsPerLayer ?? 3 },
-            );
-
-        return {
-          mode:    'execute',
-          routing: {
-            source:      routeResult.source,
-            anchor:      routeResult.anchorId,
-            teamContext: routeResult.teamContext,
-            reasoning:   routeResult.reasoning,
-            stackId:     routeResult.stackDef.stackId,
-            layers:      routeResult.stackDef.layers.map(l => l.personaId),
-          },
-          stackId:        execResult.stackId,
-          status:         execResult.status,
-          totalTurns:     execResult.totalTurns,
-          layers: execResult.layers.map(lr => ({
-            personaId:    lr.personaId,
-            layerType:    lr.layerType,
-            finalPhase:   lr.finalPhase,
-            finalC:       lr.finalC,
-            qualityGrade: lr.qualityGrade,
-          })),
-          composedPrompt: execResult.composedPrompt,
-        };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return {
-          mode:    'execute_failed',
-          routing: {
-            source:      routeResult.source,
-            anchor:      routeResult.anchorId,
-            teamContext: routeResult.teamContext,
-            reasoning:   routeResult.reasoning,
-            stackId:     routeResult.stackDef.stackId,
-          },
-          error: msg,
-        };
-      }
-    }),
-  },
-
-  // ── 11. arha_agent_run (Vol.H — Agent Loop) ─────────────────────────────────
-  {
-    name: 'arha_agent_run',
-    description:
-      'ARHA 에이전트 루프 — 완전 자율 단일 턴 실행. ' +
-      'arha_process → systemPrompt 자동 주입 → Hook 평가 → Claude API 직접 호출 → Π 자동 영속. ' +
-      '기존 arha_process와 달리 Claude 응답까지 포함해서 반환. ' +
-      '세션 재시작 후에도 vsB·Ψ_Res·waveCount 등 전체 상태가 복구됨. ' +
-      '발동된 Hook 목록(hooksFired)으로 자동 개입 내역 확인 가능. ' +
-      'ANTHROPIC_API_KEY 환경변수 필요.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        input: {
-          type:        'string',
-          description: '사용자 입력 텍스트',
-        },
-        sessionId: {
-          type:        'string',
-          description: '세션 ID (없으면 "default"). 동일 ID로 재호출 시 이전 상태 복구.',
-        },
-        personaId: {
-          type:        'string',
-          description: '페르소나 ID (기본: HighSol)',
-          default:     'HighSol',
-        },
-        model: {
-          type:        'string',
-          description: 'Claude 모델 ID (기본: claude-sonnet-4-6)',
-          default:     'claude-sonnet-4-6',
-        },
-        maxTokens: {
-          type:        'number',
-          description: '최대 출력 토큰 수 (기본: 4096)',
-          default:     4096,
-        },
-        enableHooks: {
-          type:        'boolean',
-          description: 'Hook 자동 개입 활성화 여부 (기본: true)',
-          default:     true,
-        },
-      },
-      required: ['input'],
-    },
-    handler: defineHandler(
-      z.object({
-        input:       z.string().min(1),
-        sessionId:   sessionIdSchema.optional(),
-        personaId:   personaIdSchema.optional(),
-        model:       z.string().min(1).optional(),
-        maxTokens:   z.number().int().min(1).max(64000).optional(),
-        enableHooks: z.boolean().optional(),
-      }),
-      async (args) => {
-      const sid       = args.sessionId ?? 'default';
-      const personaId = args.personaId ?? 'HighSol';
-
-      let anthropic: Anthropic;
-      try {
-        anthropic = new Anthropic({
-          apiKey: process.env.ANTHROPIC_API_KEY ?? process.env.CLAUDE_API_KEY,
-        });
-      } catch {
-        return { error: 'ANTHROPIC_API_KEY not set. Set it in environment to use arha_agent_run.' };
-      }
-
-      // Per-session serial queue — agent turn은 LLM 왕복 + state 변경.
-      // 이 호출 중 같은 세션의 arha_process가 끼어들면 turn 카운터·resonance가 꼬임.
-      return sessionRegistry.runSerialized(sid, personaId, async (runtime) => {
-        try {
-          const result = await runAgentTurn(
-            args.input,
-            {
-              sessionId:   sid,
-              personaId:   args.personaId,
-              model:       args.model,
-              maxTokens:   args.maxTokens,
-              hooks:       (args.enableHooks ?? true) ? DEFAULT_HOOKS : [],
-            },
-            runtime,
-            anthropic,
-          );
-
-          return {
-            response:     result.response,
-            sessionId:    result.sessionId,
-            personaId:    result.personaId,
-            turn:         result.turn,
-            qualityGrade: result.qualityGrade,
-            arhaState: {
-              C:            result.arhaState.C,
-              Gamma:        result.arhaState.Gamma,
-              phase:        result.arhaState.phase,
-              psiResonance: result.arhaState.psiResonance,
-              vsB:          result.arhaState.vsB,
-              g:            result.arhaState.g,
-              p:            result.arhaState.p,
-              waveCount:    result.arhaState.waveCount,
-            },
-            hooksFired:   result.hooksFired,
-            tokens: {
-              input:  result.inputTokens,
-              output: result.outputTokens,
-            },
-            // system prompt는 필요 시 arha_process로 별도 조회
-          };
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          return { error: msg };
-        }
-      });
-    }),
-  },
-
-  // ── 12. arha_vc_run (Vol.F_VC — 6-Phase Value Chain Pipeline) ──────────────
-  {
-    name: 'arha_vc_run',
-    description:
-      'Vol.F_VC: Run the universal 6-phase value chain pipeline (P1 SENSING → P2 SYNTHESIS → ' +
-      'P3 TRANSFORMATION → P4 DEPLOYMENT → P5 INTERACTION → P6 EVOLUTION) with a persona lens applied. ' +
-      'Each phase produces a quality score; gate failures block downstream phases. ' +
-      'Returns vc_total (0-1), grade (senior/professional/junior), per-phase scores, and a trail of phase markers. ' +
-      'Use this to verify whether a persona\'s output meets senior-level value conditions.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        personaId: {
-          type: 'string',
-          description: 'Persona lens to apply (e.g., "jobs"). Run arha_vc_lenses to list available lenses.',
-        },
-        text: {
-          type: 'string',
-          description: 'The input text to evaluate through the pipeline',
-        },
-        context: {
-          type: 'string',
-          description: 'Optional project/conversation context',
-        },
-      },
-      required: ['personaId', 'text'],
-    },
-    handler: defineHandler(
-      z.object({
-        personaId: z.string().min(1),
-        text:      z.string().min(1),
-        context:   z.string().optional(),
-      }),
-      async (args) => {
-        const { getLens, runVCPipeline, listLenses } = await import('../core/vc/index.js');
-        const lens = getLens(args.personaId.toLowerCase());
-        if (!lens) {
-          return {
-            error: `No lens registered for persona "${args.personaId}".`,
-            available: listLenses(),
-          };
-        }
-        const result = await runVCPipeline(lens, {
-          text: args.text,
-          context: args.context,
-        });
-        return {
-          persona_id: result.persona_id,
-          persona_name: lens.persona_meta.name,
-          vc_total: Number(result.vc_total.toFixed(3)),
-          grade: result.grade,
-          output_permitted: result.output_permitted,
-          constitutional_blocked: result.constitutional_blocked,
-          phase_results: result.phase_results.map(r => ({
-            phase: r.phase,
-            metric_name: r.metric_name,
-            score: Number(r.score.toFixed(3)),
-            passed: r.passed,
-            blocks_triggered: r.blocks_triggered,
-          })),
-          trail: result.trail,
-        };
-      },
-    ),
-  },
-
-  // ── 13. arha_vc_lenses (Vol.F_VC — Available Persona Lenses) ───────────────
-  {
-    name: 'arha_vc_lenses',
-    description:
-      'Vol.F_VC: List all registered persona lenses available for the value chain pipeline. ' +
-      'Returns persona_id, name, V1_core, and constitutional_law for each. ' +
-      'Use this before arha_vc_run to discover which personas have lens configurations.',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-    },
-    handler: defineHandler(
-      z.object({}).strict(),
-      async () => {
-        const { listLenses, getLens } = await import('../core/vc/index.js');
-        const ids = listLenses();
-        return {
-          count: ids.length,
-          lenses: ids.map(id => {
-            const lens = getLens(id)!;
-            return {
-              persona_id: lens.persona_meta.persona_id,
-              name: lens.persona_meta.name,
-              v1_core: lens.persona_meta.v1_core,
-              constitutional_law: lens.persona_meta.constitutional_law,
-              dominant_engine: lens.persona_meta.dominant_engine,
-            };
-          }),
-        };
-      },
-    ),
-  },
-
-  // ── 14. arha_about (Vol.0 — Identity & Usage Guide) ────────────────────────
-  {
-    name: 'arha_about',
-    description:
-      'ARHA identity declaration + full usage guide. ' +
-      'No parameters required. Returns: who ARHA is, why it exists, all 10 tools with examples, ' +
-      '4 quick-start recipes, and a glossary of 13 key ARHA terms. ' +
-      'Call this first if you are unfamiliar with ARHA.',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-    },
-    handler: defineHandler(
-      // 인자 없음 — 빈 객체만 허용. 잘못된 args가 들어와도 명확히 거절.
-      z.object({}).strict(),
-      async () => {
-        // display 필드를 최상단에 배치 — Claude가 이 텍스트를 사용자에게 그대로 렌더링합니다
-        return formatAboutResponse();
-      }
-    ),
-  },
-
-] as const;
-
-export type ARHAToolName = typeof ARHA_TOOLS[number]['name'];
+export type ToolName = keyof typeof TOOLS;
